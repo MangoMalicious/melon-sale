@@ -36,7 +36,7 @@ sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkO
 worksheet = sh.get_worksheet(0)
 
 # --- CACHED DATA LOADING ---
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=60) # Increased TTL for better stability; clear() handles updates
 def load_data():
     data = worksheet.get_all_records()
     return pd.DataFrame(data)
@@ -47,12 +47,11 @@ def save_data():
     if weight and weight > 0:
         total_price = round(weight * PRICE_PER_KG, 2)
         date_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
-        
         try:
             worksheet.append_row([date_str, weight, PRICE_PER_KG, total_price])
             st.toast(f"Saved {weight}kg successfully")
             st.session_state.weight_input = None
-            st.cache_data.clear()
+            st.cache_data.clear() 
         except Exception:
             st.error("Connection error. Check Google Sheet.")
     else:
@@ -90,27 +89,18 @@ st.sidebar.number_input(
 st.sidebar.markdown("---")
 if not df.empty:
     st.sidebar.header("Manage Data")
-    
     st.sidebar.number_input(
         "Row ID to Delete", 
-        min_value=1, 
-        max_value=len(df), 
-        step=1, 
-        value=None,
-        placeholder="Enter ID...",
-        key="row_to_delete",
+        min_value=1, max_value=len(df), step=1, value=None,
+        placeholder="Enter ID...", key="row_to_delete",
         on_change=delete_row
     )
     st.sidebar.button("Remove Row", on_click=delete_row)
 
-    # --- DOWNLOAD REPORT FEATURE ---
     st.sidebar.markdown("---")
     st.sidebar.header("Reports")
-    
-    # Generate CSV data
     csv_data = df.to_csv(index=False).encode('utf-8')
     file_timestamp = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y%m%d_%H%M")
-    
     st.sidebar.download_button(
         label="Download Sales Report",
         data=csv_data,
@@ -122,18 +112,22 @@ if st.sidebar.button("Refresh Dashboard"):
     st.cache_data.clear()
     st.rerun()
 
-# --- MAIN DASHBOARD ---
-if not df.empty:
-    df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
-    df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
-    
-    c1, c2 = st.columns(2)
-    c1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
-    c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
-    
-    st.subheader("Sales History")
-    df_display = df.iloc[::-1].copy()
-    df_display.index = range(len(df), 0, -1)
-    st.dataframe(df_display, use_container_width=True)
-else:
-    st.info("No sales logged yet.")
+# --- MAIN DASHBOARD (FLICKER FIX) ---
+# st.empty() creates a stable slot that updates instantly without fading
+dashboard_placeholder = st.empty()
+
+with dashboard_placeholder.container():
+    if not df.empty:
+        df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
+        df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
+        c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
+        
+        st.subheader("Sales History")
+        df_display = df.iloc[::-1].copy()
+        df_display.index = range(len(df), 0, -1)
+        st.dataframe(df_display, use_container_width=True)
+    else:
+        st.info("No sales logged yet.")
