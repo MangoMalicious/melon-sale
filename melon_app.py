@@ -125,8 +125,12 @@ if not df.empty:
     col2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    # We show the Index so they know which "Row ID" to type in the sidebar
-    df.index = df.index + 1 
+    
+    # 1. Assign correct Row IDs (starting from 1)
+    df.index = range(1, len(df) + 1)
+    
+    # 2. Sort so the latest entry (highest number) is at the top
+    # This makes Row 5 appear above Row 4, matching the physical sheet row count
     st.dataframe(df.sort_index(ascending=False), use_container_width=True)
 else:
     st.info("The sheet is currently empty. Start logging to see your stats")
