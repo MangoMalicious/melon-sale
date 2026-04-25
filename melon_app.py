@@ -3,17 +3,16 @@ import pandas as pd
 import gspread
 from datetime import datetime, timedelta
 
-# FIXED PRICE
+# CONFIG
 PRICE_PER_KG = 18.00
 
 st.set_page_config(page_title="Family Melon Sale")
 st.title("Family Melon Sale Dashboard")
 
-# --- THE ULTIMATE CSS FIX (Reinforced) ---
+# --- CSS FIX ---
 st.markdown(
     """
     <style>
-    /* Hides the 'Press Enter' subtext container permanently */
     [data-testid="stWidgetInstructions"], 
     div[data-testid="stNumberInput"] > div:nth-child(3),
     section[data-testid="stSidebar"] small,
@@ -25,57 +24,40 @@ st.markdown(
         padding: 0px !important;
         position: absolute !important;
     }
-
-    /* Success message styling */
     .big-success {
-        padding: 20px;
-        background-color: #d4edda;
-        color: #155724;
-        border-radius: 10px;
-        text-align: center;
-        font-weight: bold;
-        font-size: 24px;
-        margin-bottom: 20px;
+        padding: 20px; background-color: #d4edda; color: #155724;
+        border-radius: 10px; text-align: center; font-weight: bold;
+        font-size: 24px; margin-bottom: 20px;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Authenticate with Google
-scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+# Authenticate
 credentials = dict(st.secrets["gcp_service_account"])
 gc = gspread.service_account_from_dict(credentials)
 sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing") 
 worksheet = sh.get_worksheet(0)
 
-# --- TIMEZONE LOGIC ---
-def get_malaysia_date():
-    msia_now = datetime.utcnow() + timedelta(hours=8)
-    return msia_now.strftime("%Y-%m-%d")
-
-# --- LOGIC FUNCTIONS ---
+# --- ACTIONS ---
 def save_data():
     weight = st.session_state.weight_input
-    if weight is not None and weight > 0:
-        total_price = weight * PRICE_PER_KG
-        date_str = get_malaysia_date()
-        worksheet.append_row([date_str, weight, PRICE_PER_KG, total_price])
+    if weight and weight > 0:
+        date_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
+        worksheet.append_row([date_str, weight, PRICE_PER_KG, weight * PRICE_PER_KG])
         st.session_state.weight_input = None
         st.session_state.last_saved = f"Saved {weight}kg successfully"
     else:
-        st.error("Please enter a valid weight")
+        st.error("Enter a valid weight")
 
-def delete_specific_row():
-    row_to_delete = st.session_state.row_to_delete
-    # Adding 1 because Google Sheets is 1-indexed and Row 1 is headers
-    actual_row = row_to_delete + 1
+def delete_row():
     try:
-        worksheet.delete_rows(actual_row)
-        st.sidebar.success(f"Row {row_to_delete} deleted")
+        worksheet.delete_rows(st.session_state.row_to_delete + 1)
+        st.sidebar.success(f"Row {st.session_state.row_to_delete} removed")
         st.rerun()
-    except Exception as e:
-        st.sidebar.error("Could not delete row")
+    except:
+        st.sidebar.error("Delete failed")
 
 # Load data
 data = worksheet.get_all_records()
@@ -83,53 +65,37 @@ df = pd.DataFrame(data)
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
-st.sidebar.write(f"Date (MY): **{get_malaysia_date()}**")
+st.sidebar.write(f"Date: **{(datetime.utcnow() + timedelta(hours=8)).strftime('%Y-%m-%d')}**")
 
 st.sidebar.number_input(
-    "Weight (kg)", 
-    value=None, 
-    placeholder="Type weight here...", 
-    format="%.2f",
-    key="weight_input",
-    on_change=save_data
+    "Weight (kg)", value=None, placeholder="Type weight here...", 
+    format="%.2f", key="weight_input", on_change=save_data
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("Manage Data")
-
-# Specific Row Delete
 if not df.empty:
-    st.sidebar.number_input("Enter Row ID to Delete", min_value=1, max_value=len(df), step=1, key="row_to_delete")
-    if st.sidebar.button("Remove Row"):
-        delete_specific_row()
+    st.sidebar.header("Manage Data")
+    st.sidebar.number_input("Row ID to Delete", min_value=1, max_value=len(df), step=1, key="row_to_delete")
+    st.sidebar.button("Remove Row", on_click=delete_row)
 
-if st.sidebar.button("Refresh Dashboard"):
-    st.rerun()
+st.sidebar.button("Refresh Dashboard")
 
-# --- DASHBOARD ---
-if "last_saved" in st.session_state and st.session_state.last_saved:
+# --- MAIN DASHBOARD ---
+if st.session_state.get("last_saved"):
     st.markdown(f'<div class="big-success">{st.session_state.last_saved}</div>', unsafe_allow_html=True)
     st.session_state.last_saved = ""
 
 if not df.empty:
-    col1, col2 = st.columns(2)
-    df["Total"] = pd.to_numeric(df["Total"], errors='coerce')
-    df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce')
-    df = df.fillna(0)
+    df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
+    df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
     
-    col1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
-    col2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
+    c1, c2 = st.columns(2)
+    c1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
+    c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    
-    # --- TABLE SORT FIX ---
-    # 1. Flip data so latest is at the top
-    df_display = df.iloc[::-1].copy()
-    
-    # 2. Assign Row IDs in descending order (e.g., 5, 4, 3, 2, 1)
-    # This ensures Row 5 in the table is actually Row 5 in the Sheet
-    df_display.index = range(len(df), 0, -1)
-    
-    st.dataframe(df_display, use_container_width=True)
+    # Simplify: Just set the index to match the sheet rows and show as is
+    df.index = range(1, len(df) + 1)
+    st.dataframe(df, use_container_width=True)
 else:
-    st.info("The sheet is currently empty. Start logging to see your stats")
+    st.info("No sales logged yet.")
