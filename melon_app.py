@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 from datetime import datetime
 import pytz
-import io # Needed for Excel buffer
+import io 
 
 # CONFIG
 PRICE_PER_KG = 18.00
@@ -60,7 +60,8 @@ def save_data():
     weight = st.session_state.weight_input
     if weight and weight > 0:
         now = datetime.now(MY_TZ)
-        date_str = now.strftime("%Y-%m-%d")
+        # CHANGE 1: Updated date format for Google Sheet to DD-MM-YYYY
+        date_str = now.strftime("%d-%m-%Y") 
         ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
         st.toast(f"Saved {weight}kg")
         st.session_state.weight_input = None
@@ -100,10 +101,13 @@ if not df.empty:
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sales')
     
+    # CHANGE 2: Updated file naming format to DD-MM-YYYY
+    current_date_str = datetime.now(MY_TZ).strftime('%d-%m-%Y')
+    
     st.sidebar.download_button(
         label="Download Excel Report",
         data=buffer.getvalue(),
-        file_name=f"melon_sales_{datetime.now(MY_TZ).strftime('%Y%m%d')}.xlsx",
+        file_name=f"melon_sales_{current_date_str}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
