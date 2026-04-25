@@ -99,7 +99,7 @@ if st.sidebar.button("Refresh Dashboard"):
     st.rerun()
 
 # --- MAIN DASHBOARD ---
-st.title("Family Melon Sale")
+st.title("BG Melon Sale")
 
 dashboard = st.empty()
 with dashboard.container():
