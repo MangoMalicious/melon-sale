@@ -25,20 +25,26 @@ df = pd.DataFrame(data)
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
+
 with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Date", date.today())
-    weight = st.number_input("Weight (kg)", min_value=0.1, step=0.1)
+    # We remove the step/min_value defaults that might be forcing the reset
+    weight_input = st.number_input("Weight (kg)", format="%.2f")
     
-    total_price = weight * PRICE_PER_KG
-    st.info(f"**Total to Charge: RM {total_price:.2f}**")
+    st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
     
     submitted = st.form_submit_button("Confirm Sale")
     
     if submitted:
-        # Append row: Date, Weight, Price_per_kg, Total
-        worksheet.append_row([str(sale_date), weight, PRICE_PER_KG, total_price])
-        st.success("Saved to Cloud!")
-        st.rerun()
+        if weight_input > 0:
+            total_price = weight_input * PRICE_PER_KG
+            # Append row directly using the input variable
+            worksheet.append_row([str(sale_date), weight_input, PRICE_PER_KG, total_price])
+            st.sidebar.success(f"Saved {weight_input}kg!")
+            # We use st.switch_page or just let the app naturally refresh 
+            # instead of a forced rerun which can wipe the temp memory
+        else:
+            st.sidebar.warning("Please enter a weight greater than 0")
 
 # --- DASHBOARD ---
 # This ensures that if the sheet is empty, the app doesn't crash
