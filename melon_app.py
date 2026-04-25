@@ -9,14 +9,17 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale")
 st.title("Family Melon Sale Dashboard")
 
-# --- CUSTOM CSS ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
-    [data-testid="stWidgetInstructions"], div[data-testid="stNumberInput"] small {
+    [data-testid="stWidgetInstructions"], 
+    div[data-testid="stNumberInput"] small {
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
     }
     .big-success {
         padding: 20px;
@@ -42,7 +45,6 @@ worksheet = sh.get_worksheet(0)
 
 # --- TIMEZONE LOGIC ---
 def get_malaysia_date():
-    # Streamlit Cloud is UTC. Malaysia is UTC+8.
     msia_now = datetime.utcnow() + timedelta(hours=8)
     return msia_now.strftime("%Y-%m-%d")
 
@@ -52,25 +54,26 @@ def save_data():
     if weight is not None and weight > 0:
         total_price = weight * PRICE_PER_KG
         date_str = get_malaysia_date()
-        
-        # COLUMN ORDER: Date, Weight_kg, Price_per_kg, Total
         worksheet.append_row([date_str, weight, PRICE_PER_KG, total_price])
-        
         st.session_state.weight_input = None
         st.session_state.last_saved = f"Saved {weight}kg successfully"
     else:
         st.error("Please enter a valid weight")
 
-def undo_last_sale():
-    records = worksheet.get_all_records()
-    if len(records) > 0:
-        # Headers are Row 1, last record is Row (Count + 1)
-        last_row_index = len(records) + 1
-        worksheet.delete_rows(last_row_index)
-        st.sidebar.warning("Last sale deleted")
+def delete_specific_row():
+    row_to_delete = st.session_state.row_to_delete
+    # Adding 1 because Google Sheets is 1-indexed and Row 1 is headers
+    actual_row = row_to_delete + 1
+    try:
+        worksheet.delete_rows(actual_row)
+        st.sidebar.success(f"Row {row_to_delete} deleted")
         st.rerun()
-    else:
-        st.sidebar.error("No sales found to delete")
+    except Exception as e:
+        st.sidebar.error("Could not delete row")
+
+# Load data
+data = worksheet.get_all_records()
+df = pd.DataFrame(data)
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
@@ -85,10 +88,14 @@ st.sidebar.number_input(
     on_change=save_data
 )
 
-st.sidebar.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
+st.sidebar.markdown("---")
+st.sidebar.header("Manage Data")
 
-if st.sidebar.button("Undo Last Sale"):
-    undo_last_sale()
+# Specific Row Delete
+if not df.empty:
+    st.sidebar.number_input("Enter Row ID to Delete", min_value=1, max_value=len(df), step=1, key="row_to_delete")
+    if st.sidebar.button("Remove Row"):
+        delete_specific_row()
 
 if st.sidebar.button("Refresh Dashboard"):
     st.rerun()
@@ -98,12 +105,8 @@ if "last_saved" in st.session_state and st.session_state.last_saved:
     st.markdown(f'<div class="big-success">{st.session_state.last_saved}</div>', unsafe_allow_html=True)
     st.session_state.last_saved = ""
 
-data = worksheet.get_all_records()
-df = pd.DataFrame(data)
-
 if not df.empty:
     col1, col2 = st.columns(2)
-    # Force columns to numeric for calculation
     df["Total"] = pd.to_numeric(df["Total"], errors='coerce')
     df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce')
     df = df.fillna(0)
@@ -112,6 +115,8 @@ if not df.empty:
     col2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    st.dataframe(df.sort_values("Date", ascending=False), use_container_width=True)
+    # We show the Index so they know which "Row ID" to type in the sidebar
+    df.index = df.index + 1 
+    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
 else:
     st.info("The sheet is currently empty. Start logging to see your stats")
