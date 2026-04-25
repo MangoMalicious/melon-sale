@@ -120,7 +120,7 @@ st.title("BG Melon Sale")
 dashboard = st.empty()
 with dashboard.container():
     if not df.empty:
-        df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
+        df["Total(RM)"] = pd.to_numeric(df["Total(RM)"], errors='coerce').fillna(0)
         df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
         
         display_rev = rev_total if rev_total > 0 else df["Total"].sum()
