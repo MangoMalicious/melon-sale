@@ -46,8 +46,14 @@ def save_data():
     if weight and weight > 0:
         date_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
         worksheet.append_row([date_str, weight, PRICE_PER_KG, weight * PRICE_PER_KG])
+        
+        # RESET INPUT AND MESSAGES
         st.session_state.weight_input = None
         st.session_state.last_saved = f"Saved {weight}kg successfully"
+        
+        # FIX: Clear the delete notification when a new sale is made
+        if "last_deleted" in st.session_state:
+            st.session_state.last_deleted = ""
     else:
         st.error("Enter a valid weight")
 
@@ -55,10 +61,11 @@ def delete_row():
     row_to_del = st.session_state.get("row_to_delete")
     if row_to_del:
         try:
-            # +1 because Sheet headers are row 1
             worksheet.delete_rows(row_to_del + 1)
-            # Store success message in state to survive the rerun
             st.session_state.last_deleted = f"Row {row_to_del} removed successfully"
+            # Clear any 'Saved' message when deleting
+            if "last_saved" in st.session_state:
+                st.session_state.last_saved = ""
         except Exception:
             st.session_state.delete_error = "Delete failed"
 
@@ -79,7 +86,6 @@ st.sidebar.markdown("---")
 if not df.empty:
     st.sidebar.header("Manage Data")
     
-    # Adding on_change here allows pressing ENTER to delete
     st.sidebar.number_input(
         "Row ID to Delete", 
         min_value=1, 
@@ -92,7 +98,7 @@ if not df.empty:
     )
     st.sidebar.button("Remove Row", on_click=delete_row)
 
-    # Show delete status in sidebar
+    # Display delete notifications in sidebar
     if st.session_state.get("last_deleted"):
         st.sidebar.success(st.session_state.last_deleted)
         st.session_state.last_deleted = ""
@@ -116,11 +122,8 @@ if not df.empty:
     c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    
-    # SORT BY LATEST: Reverse data and assign IDs in descending order
     df_display = df.iloc[::-1].copy()
     df_display.index = range(len(df), 0, -1)
-    
     st.dataframe(df_display, use_container_width=True)
 else:
     st.info("No sales logged yet.")
