@@ -13,13 +13,25 @@ st.title("🍈 Family Melon Sale Dashboard")
 st.markdown(
     """
     <style>
-    /* Hides the 'Press Enter to submit form' text in the sidebar */
-    section[data-testid="stSidebar"] small {
+    /* 1. Targets the specific instruction class */
+    .st-emotion-cache-176lth7, .st-emotion-cache-v06xl4, small {
         display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+    }
+    
+    /* 2. Specifically targets form subtext in sidebar */
+    [data-testid="stForm"] div[data-testid="stMarkdownContainer"] p small {
+        display: none !important;
+    }
+
+    /* 3. Removes the gap left behind by the hidden text */
+    div[data-testid="stForm"] {
+        gap: 0rem !important;
     }
     </style>
     """,
-    unsafe_allow_html=True  # Changed from _home to _html
+    unsafe_allow_html=True
 )
 
 # Authenticate with Google
