@@ -3,12 +3,13 @@ import pandas as pd
 import gspread
 from datetime import datetime
 import pytz
+import io # Needed for Excel buffer
 
 # CONFIG
 PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-st.set_page_config(page_title="BG Melon Sale", layout="centered")
+st.set_page_config(page_title="Family Melon Sale", layout="centered")
 
 # --- CSS FIX ---
 st.markdown(
@@ -71,8 +72,6 @@ def delete_row():
     idx_to_del = st.session_state.get("row_to_delete")
     if idx_to_del is not None:
         try:
-            # FIX: Convert the App ID (0, 1, 2) back to Sheet Row (2, 3, 4)
-            # Logic: Sheet_Row = App_ID + 2
             sheet_row = int(idx_to_del) + 2
             ws.delete_rows(sheet_row)
             st.toast(f"ID {idx_to_del} removed")
@@ -91,15 +90,29 @@ st.sidebar.number_input("Weight (kg)", min_value=0.0, value=None, step=0.1, key=
 if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
-    # Starts at 0
     st.sidebar.number_input("Enter ID to Delete", min_value=0, step=1, value=None, key="row_to_delete", on_change=delete_row)
+
+    st.sidebar.markdown("---")
+    st.sidebar.header("Reports")
+    
+    # EXCEL GENERATION
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sales')
+    
+    st.sidebar.download_button(
+        label="Download Excel Report",
+        data=buffer.getvalue(),
+        file_name=f"melon_sales_{datetime.now(MY_TZ).strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 if st.sidebar.button("Refresh Dashboard"):
     st.cache_data.clear()
     st.rerun()
 
 # --- MAIN DASHBOARD ---
-st.title("BG Melon Sale")
+st.title("Family Melon Sale")
 
 dashboard = st.empty()
 with dashboard.container():
@@ -115,12 +128,8 @@ with dashboard.container():
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
-        
         df_display = df.copy()
-        # FIX: Force index to start from 0
         df_display.index = range(len(df))
-        
-        # Show newest on top
         st.dataframe(df_display.iloc[::-1], use_container_width=True)
     else:
         st.info("No sales logged yet.")
