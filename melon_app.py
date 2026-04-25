@@ -9,26 +9,28 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale")
 st.title("Family Melon Sale Dashboard")
 
-# --- THE FINAL AGGRESSIVE CSS FIX ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
-    /* 1. Target by partial ID match (Wildcard) */
-    [id*="instructions"], [data-testid="stWidgetInstructions"] {
+    /* Hides the 'Press Enter' subtext container permanently */
+    [data-testid="stWidgetInstructions"], 
+    div[data-testid="stNumberInput"] > div:nth-child(3),
+    section[data-testid="stSidebar"] small {
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
         margin: 0px !important;
         padding: 0px !important;
+        position: absolute !important;
     }
 
-    /* 2. Target the specific 'small' tag inside sidebar inputs */
-    section[data-testid="stSidebar"] small {
+    /* Target the specific element that appears after typing */
+    div.stNumberInput div[data-testid="caption"] {
         display: none !important;
-        visibility: hidden !important;
     }
 
-    /* 3. Style for the big success message */
+    /* Success message styling */
     .big-success {
         padding: 20px;
         background-color: #d4edda;
