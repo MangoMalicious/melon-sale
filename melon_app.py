@@ -9,7 +9,6 @@ import io
 PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-# Updated page title
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
 # --- CSS FIX ---
@@ -49,6 +48,7 @@ def load_recent_data():
 @st.cache_data(ttl=10)
 def get_totals():
     try:
+        # Fetches sums from G1 and G2 (Make sure formulas are updated in Gsheets if columns shifted)
         vals = ws.batch_get(['G1', 'G2'])
         rev = vals[0][0][0] if vals[0] and vals[0][0] else 0
         wgt = vals[1][0][0] if vals[1] and vals[1][0] else 0
@@ -62,6 +62,7 @@ def save_data():
     if weight and weight > 0:
         now = datetime.now(MY_TZ)
         date_str = now.strftime("%d-%m-%Y") 
+        # Writes to the sheet using the values; column headers in Sheet stay as you set them
         ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
         st.toast(f"Saved {weight}kg")
         st.session_state.weight_input = None
@@ -114,16 +115,19 @@ if st.sidebar.button("Refresh Dashboard"):
     st.rerun()
 
 # --- MAIN DASHBOARD ---
-# Updated main title
 st.title("BG Melon Sale")
 
 dashboard = st.empty()
 with dashboard.container():
     if not df.empty:
-        df["Total(RM)"] = pd.to_numeric(df["Total(RM)"], errors='coerce').fillna(0)
+        # Detect which column name is being used in Gsheets
+        target_col = "Total(RM)" if "Total(RM)" in df.columns else "Total"
+        
+        # Pre-process for numeric operations
+        df[target_col] = pd.to_numeric(df[target_col], errors='coerce').fillna(0)
         df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
         
-        display_rev = rev_total if rev_total > 0 else df["Total"].sum()
+        display_rev = rev_total if rev_total > 0 else df[target_col].sum()
         display_wgt = wgt_total if wgt_total > 0 else df["Weight_kg"].sum()
 
         c1, c2 = st.columns(2)
@@ -131,8 +135,11 @@ with dashboard.container():
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
+        
+        # Display table with the exact headers from Gsheets
         df_display = df.copy()
         df_display.index = range(len(df))
+        
         st.dataframe(df_display.iloc[::-1], use_container_width=True)
     else:
         st.info("No sales logged yet.")
