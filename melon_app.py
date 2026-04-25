@@ -9,6 +9,19 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale", page_icon="🍈")
 st.title("🍈 Family Melon Sale Dashboard")
 
+# --- CUSTOM CSS TO HIDE SUBTEXT ---
+st.markdown(
+    """
+    <style>
+    /* Hides the 'Press Enter to submit form' text */
+    div[data-testid="stForm"] small {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_home=True
+)
+
 # Authenticate with Google
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 credentials = dict(st.secrets["gcp_service_account"])
