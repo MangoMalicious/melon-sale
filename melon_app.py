@@ -9,15 +9,17 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale", page_icon="🍈")
 st.title("🍈 Family Melon Sale Dashboard")
 
+# --- CUSTOM CSS TO HIDE SUBTEXT ---
 st.markdown(
     """
     <style>
+    /* Hides the 'Press Enter to submit form' text in the sidebar */
     section[data-testid="stSidebar"] small {
-        display: none;
+        display: none !important;
     }
     </style>
     """,
-    unsafe_allow_home=True
+    unsafe_allow_html=True  # Changed from _home to _html
 )
 
 # Authenticate with Google
