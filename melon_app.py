@@ -10,7 +10,7 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="Family Melon Sale", layout="centered")
 
-# --- CSS FIX ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
@@ -27,7 +27,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Auth
+# Authenticate with Session State Persistence
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -36,13 +36,14 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
+# --- OPTIMIZED DATA LOADING ---
 @st.cache_data(ttl=10)
 def load_recent_data():
     all_values = ws.get_all_values()
     if len(all_values) <= 1: return pd.DataFrame()
     
     headers = all_values[0]
-    # Get last 100 rows
+    # Fetch last 100 rows to ensure speed on 4G/5G
     recent_rows = all_values[-100:] if len(all_values) > 100 else all_values[1:]
     df = pd.DataFrame(recent_rows, columns=headers)
     return df
@@ -50,7 +51,7 @@ def load_recent_data():
 @st.cache_data(ttl=10)
 def get_totals():
     try:
-        # Tries to read the SUM formulas from G1 and G2
+        # Fetches sums from G1 and G2 (Requires formulas =SUM(D:D) and =SUM(B:B) in Sheet)
         vals = ws.batch_get(['G1', 'G2'])
         rev = vals[0][0][0] if vals[0] and vals[0][0] else 0
         wgt = vals[1][0][0] if vals[1] and vals[1][0] else 0
@@ -75,26 +76,40 @@ def delete_row():
     row_to_del = st.session_state.get("row_to_delete")
     if row_to_del:
         try:
-            # Sheet Row 1 is header, so row_to_del matches the actual row number
+            # Syncs with actual Sheet Row Number
             ws.delete_rows(int(row_to_del))
             st.toast(f"Row {row_to_del} removed")
             st.session_state.row_to_delete = None
             st.cache_data.clear()
-        except Exception as e:
+        except Exception:
             st.error("Delete failed")
 
+# Data Fetching
 df = load_recent_data()
 rev_total, wgt_total = get_totals()
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
-st.sidebar.number_input("Weight (kg)", min_value=0.0, value=None, step=0.1, key="weight_input", on_change=save_data)
+st.sidebar.number_input(
+    "Weight (kg)", 
+    min_value=0.0, 
+    value=None, 
+    step=0.1, 
+    key="weight_input", 
+    on_change=save_data
+)
 
 if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
-    # FIX: Use a simple number input without min/max constraints to allow deleting any valid row
-    st.sidebar.number_input("Enter Row ID from Table", step=1, value=None, key="row_to_delete", on_change=delete_row)
+    st.sidebar.number_input(
+        "Type Row ID to Delete", 
+        min_value=2, 
+        step=1, 
+        value=None, 
+        key="row_to_delete", 
+        on_change=delete_row
+    )
 
 if st.sidebar.button("Refresh Dashboard"):
     st.cache_data.clear()
@@ -110,7 +125,7 @@ with dashboard.container():
         df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
         df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
         
-        # If G1/G2 formulas aren't set up, calculate from the visible DF as fallback
+        # Fallback calculation if formulas aren't set in Sheet
         display_rev = rev_total if rev_total > 0 else df["Total"].sum()
         display_wgt = wgt_total if wgt_total > 0 else df["Weight_kg"].sum()
 
@@ -120,15 +135,13 @@ with dashboard.container():
         
         st.subheader("Sales History (Latest)")
         
-        # We want to show the REAL sheet row numbers
-        # If the sheet has 500 rows, the last row is 500.
+        # Calculate REAL sheet row numbers for the index
         all_vals_len = len(ws.get_all_values())
         df_display = df.copy()
-        
-        # This calculates the actual row numbers for the last 100 entries
         start_row = max(2, all_vals_len - len(df) + 1)
         df_display.index = range(start_row, start_row + len(df))
         
+        # Show newest on top
         st.dataframe(df_display.iloc[::-1], use_container_width=True)
     else:
         st.info("No sales logged yet.")
