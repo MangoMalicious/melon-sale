@@ -61,7 +61,7 @@ def save_data():
     if weight and weight > 0:
         now = datetime.now(MY_TZ)
         date_str = now.strftime("%d-%m-%Y") 
-        # Appends values in order; ensures your sheet columns match: Date, Weight, Price, Total
+        # Appends values to match your sheet structure: Date, Weight(kg), Price_per_kg, Total(RM)
         ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
         st.toast(f"Saved {weight}kg")
         st.session_state.weight_input = None
@@ -127,6 +127,7 @@ with dashboard.container():
         df[total_col] = pd.to_numeric(df[total_col], errors='coerce').fillna(0)
         df[weight_col] = pd.to_numeric(df[weight_col], errors='coerce').fillna(0)
         
+        # Fallback to sum if G1/G2 formulas are missing
         display_rev = rev_total if rev_total > 0 else df[total_col].sum()
         display_wgt = wgt_total if wgt_total > 0 else df[weight_col].sum()
 
@@ -136,7 +137,7 @@ with dashboard.container():
         
         st.subheader("Sales History")
         
-        # Display the dataframe with the exact headers currently in the Sheet
+        # Display the dataframe with the exact headers currently in the Sheet (Price_per_kg)
         df_display = df.copy()
         df_display.index = range(len(df))
         
