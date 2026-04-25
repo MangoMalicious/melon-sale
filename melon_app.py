@@ -41,14 +41,23 @@ with st.sidebar.form("sale_form", clear_on_submit=True):
         st.rerun()
 
 # --- DASHBOARD ---
-if not df.empty:
+# This ensures that if the sheet is empty, the app doesn't crash
+if not df.empty and "Total" in df.columns:
     col1, col2 = st.columns(2)
-    # Ensure columns are numeric for calculation
+    
+    # Clean up data to make sure they are numbers
     df["Total"] = pd.to_numeric(df["Total"], errors='coerce')
     df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce')
     
+    # Fill any empty cells with 0 to prevent math errors
+    df = df.fillna(0)
+    
     col1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
     col2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
+    
+    st.subheader("Sales History")
     st.dataframe(df.sort_values("Date", ascending=False), use_container_width=True)
+elif df.empty:
+    st.info("The sheet is currently empty. Start logging to see your stats!")
 else:
-    st.info("The sheet is currently empty. Start logging!")
+    st.error("Check your Google Sheet headers! Make sure they are: Date, Weight_kg, Price_per_kg, Total")
