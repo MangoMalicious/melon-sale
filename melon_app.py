@@ -36,16 +36,18 @@ worksheet = sh.get_worksheet(0)
 # --- LOGIC: Runs when input changes ---
 def save_data():
     weight = st.session_state.weight_input
+    # Get the date from its own session state key
+    log_date = st.session_state.date_input
+    
     if weight is not None and weight > 0:
         total_price = weight * PRICE_PER_KG
-        sale_date = date.today()
         
         # Save to Google Sheets
-        worksheet.append_row([str(sale_date), weight, PRICE_PER_KG, total_price])
+        worksheet.append_row([str(log_date), weight, PRICE_PER_KG, total_price])
         
-        # Reset the input box immediately
+        # Reset the weight input box immediately
         st.session_state.weight_input = None
-        st.toast(f"Saved {weight}kg successfully")
+        st.toast(f"Saved {weight}kg successfully for {log_date}")
     else:
         st.error("Please enter a valid weight")
 
@@ -56,14 +58,17 @@ df = pd.DataFrame(data)
 # --- SIDEBAR: Non-Form Version ---
 st.sidebar.header("Log New Sale")
 
-# We use on_change instead of a form button to catch the 'Enter' key immediately
+# Date input added back here
+st.sidebar.date_input("Date", date.today(), key="date_input")
+
+# Weight input with Enter-key trigger
 st.sidebar.number_input(
     "Weight (kg)", 
     value=None, 
     placeholder="Type weight here...", 
     format="%.2f",
     key="weight_input",
-    on_change=save_data  # This triggers the save the moment they hit Enter
+    on_change=save_data
 )
 
 st.sidebar.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
