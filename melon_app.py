@@ -45,9 +45,8 @@ gc = gspread.service_account_from_dict(credentials)
 sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing") 
 worksheet = sh.get_worksheet(0)
 
-# --- CALLBACK FUNCTION ---
+# --- CALLBACK FUNCTION: Captures data and clears the box ---
 def handle_sale():
-    # Use session_state to grab the value before the form logic processes
     weight_val = st.session_state.get("weight_input")
     
     if weight_val is not None and weight_val > 0:
@@ -57,11 +56,13 @@ def handle_sale():
         # Save to Google Sheets
         worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
         
-        # Confirmation toast
+        # This is the secret fix: Manually clearing the key in session state
+        # so the app doesn't get stuck on the old number
+        st.session_state["weight_input"] = None
         st.toast(f"Saved {weight_val}kg successfully")
     else:
         st.error("Please enter a valid weight before confirming")
-
+        
 # Load data for the dashboard
 data = worksheet.get_all_records()
 df = pd.DataFrame(data)
@@ -69,7 +70,7 @@ df = pd.DataFrame(data)
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
-# Removed clear_on_submit to ensure the callback captures data correctly
+# We keep clear_on_submit=False but handle the clearing manually in the callback
 with st.sidebar.form("sale_form"):
     sale_date = st.date_input("Date", date.today())
     
@@ -78,7 +79,7 @@ with st.sidebar.form("sale_form"):
         value=None, 
         placeholder="Type weight here...", 
         format="%.2f",
-        key="weight_input"
+        key="weight_input"  # This links directly to the session_state clear above
     )
     
     st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
@@ -86,7 +87,6 @@ with st.sidebar.form("sale_form"):
     # Confirm Sale button
     st.form_submit_button("Confirm Sale", on_click=handle_sale)
 
-# Button to manually refresh the dashboard view
 if st.sidebar.button("Refresh Dashboard"):
     st.rerun()
 
