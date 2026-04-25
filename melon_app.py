@@ -9,9 +9,13 @@ import io
 PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-st.set_page_config(page_title="BG Melon Sale", layout="centered")
+# Updated Branding - Icon Removed
+st.set_page_config(
+    page_title="BG Melon Sale", 
+    layout="centered"
+)
 
-# --- CSS FIX ---
+# --- THE ULTIMATE CSS FIX (Anti-Flicker) ---
 st.markdown(
     """
     <style>
@@ -28,7 +32,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Auth
+# Auth with Persistence
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -134,10 +138,8 @@ with dashboard.container():
         st.subheader("Sales History")
         
         df_display = df.copy()
-        # Normal sorting: ID 0 is top of sheet, highest ID is bottom of sheet
         df_display.index = range(len(df))
         
-        # REMOVED .iloc[::-1] so new entries appear at the BOTTOM
         st.dataframe(df_display, use_container_width=True)
     else:
         st.info("No sales logged yet.")
