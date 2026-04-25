@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from datetime import datetime
-import pytz # Standard for timezone handling
+import pytz
 
 # CONFIG
 PRICE_PER_KG = 18.00
@@ -10,7 +10,7 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="Family Melon Sale", layout="centered")
 
-# --- THE AGGRESSIVE ANTI-FLICKER CSS ---
+# --- CSS FIX ---
 st.markdown(
     """
     <style>
@@ -27,50 +27,44 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Authenticate
+# Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing")
     st.session_state.ws = sh.get_worksheet(0)
-    # We'll use this to fetch totals without downloading the whole sheet
-    st.session_state.sh = sh 
 
 ws = st.session_state.ws
 
-# --- OPTIMIZED DATA LOADING ---
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def load_recent_data():
-    # Fix 1: Only fetch the last 100 rows to keep the app fast on 4G/5G
     all_values = ws.get_all_values()
+    if len(all_values) <= 1: return pd.DataFrame()
+    
     headers = all_values[0]
-    # Get last 100 rows + headers
-    recent_rows = [headers] + all_values[-100:] if len(all_values) > 100 else all_values
-    df = pd.DataFrame(recent_rows[1:], columns=recent_rows[0])
+    # Get last 100 rows
+    recent_rows = all_values[-100:] if len(all_values) > 100 else all_values[1:]
+    df = pd.DataFrame(recent_rows, columns=headers)
     return df
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=10)
 def get_totals():
-    # Fix 1 cont.: Fetching totals from specific cells in the sheet 
-    # (Assuming you put =SUM(D:D) in cell G1 and =SUM(B:B) in cell G2)
-    # This prevents downloading 10,000 rows just to get a sum.
-    vals = ws.batch_get(['G1', 'G2']) 
-    revenue = vals[0][0][0] if vals[0] else "0.00"
-    weight = vals[1][0][0] if vals[1] else "0.00"
-    return revenue, weight
+    try:
+        # Tries to read the SUM formulas from G1 and G2
+        vals = ws.batch_get(['G1', 'G2'])
+        rev = vals[0][0][0] if vals[0] and vals[0][0] else 0
+        wgt = vals[1][0][0] if vals[1] and vals[1][0] else 0
+        return float(rev), float(wgt)
+    except:
+        return 0.0, 0.0
 
 # --- ACTIONS ---
 def save_data():
     weight = st.session_state.weight_input
     if weight and weight > 0:
-        # Fix 3: Proper Timezone Handling
         now = datetime.now(MY_TZ)
         date_str = now.strftime("%Y-%m-%d")
-        
-        # Fix 2: Using actual Row ID (based on total length) to avoid mismatch
-        # For a truly unique ID, you could use: str(int(now.timestamp()))
         ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
-        
         st.toast(f"Saved {weight}kg")
         st.session_state.weight_input = None
         st.cache_data.clear()
@@ -81,15 +75,14 @@ def delete_row():
     row_to_del = st.session_state.get("row_to_delete")
     if row_to_del:
         try:
-            # Fix 2: Safety check - ensure row exists
-            ws.delete_rows(row_to_del + 1)
+            # Sheet Row 1 is header, so row_to_del matches the actual row number
+            ws.delete_rows(int(row_to_del))
             st.toast(f"Row {row_to_del} removed")
             st.session_state.row_to_delete = None
             st.cache_data.clear()
-        except:
+        except Exception as e:
             st.error("Delete failed")
 
-# Load Data
 df = load_recent_data()
 rev_total, wgt_total = get_totals()
 
@@ -100,8 +93,8 @@ st.sidebar.number_input("Weight (kg)", min_value=0.0, value=None, step=0.1, key=
 if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
-    # Using the last row number as the max value to keep it synced
-    st.sidebar.number_input("Sheet Row ID", min_value=1, step=1, value=None, key="row_to_delete", on_change=delete_row)
+    # FIX: Use a simple number input without min/max constraints to allow deleting any valid row
+    st.sidebar.number_input("Enter Row ID from Table", step=1, value=None, key="row_to_delete", on_change=delete_row)
 
 if st.sidebar.button("Refresh Dashboard"):
     st.cache_data.clear()
@@ -113,14 +106,29 @@ st.title("Family Melon Sale")
 dashboard = st.empty()
 with dashboard.container():
     if not df.empty:
-        c1, c2 = st.columns(2)
-        # Using the lightweight totals fetched from specific cells
-        c1.metric("Total Revenue", f"RM {float(rev_total):,.2f}")
-        c2.metric("Total Weight", f"{float(wgt_total):,.2f} kg")
+        # Pre-process numeric types
+        df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
+        df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
         
-        st.subheader("Recent Sales (Last 100)")
-        df_display = df.iloc[::-1].copy()
-        # We display the actual Sheet Row Number so parents know exactly what to delete
-        st.dataframe(df_display, use_container_width=True)
+        # If G1/G2 formulas aren't set up, calculate from the visible DF as fallback
+        display_rev = rev_total if rev_total > 0 else df["Total"].sum()
+        display_wgt = wgt_total if wgt_total > 0 else df["Weight_kg"].sum()
+
+        c1, c2 = st.columns(2)
+        c1.metric("Total Revenue", f"RM {display_rev:,.2f}")
+        c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
+        
+        st.subheader("Sales History (Latest)")
+        
+        # We want to show the REAL sheet row numbers
+        # If the sheet has 500 rows, the last row is 500.
+        all_vals_len = len(ws.get_all_values())
+        df_display = df.copy()
+        
+        # This calculates the actual row numbers for the last 100 entries
+        start_row = max(2, all_vals_len - len(df) + 1)
+        df_display.index = range(start_row, start_row + len(df))
+        
+        st.dataframe(df_display.iloc[::-1], use_container_width=True)
     else:
         st.info("No sales logged yet.")
