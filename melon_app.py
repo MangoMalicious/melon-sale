@@ -52,12 +52,15 @@ def save_data():
         st.error("Enter a valid weight")
 
 def delete_row():
-    try:
-        worksheet.delete_rows(st.session_state.row_to_delete + 1)
-        st.sidebar.success(f"Row {st.session_state.row_to_delete} removed")
-        st.rerun()
-    except:
-        st.sidebar.error("Delete failed")
+    row_to_del = st.session_state.get("row_to_delete")
+    if row_to_del:
+        try:
+            # +1 because Sheet headers are row 1
+            worksheet.delete_rows(row_to_del + 1)
+            # Store success message in state to survive the rerun
+            st.session_state.last_deleted = f"Row {row_to_del} removed successfully"
+        except Exception:
+            st.session_state.delete_error = "Delete failed"
 
 # Load data
 data = worksheet.get_all_records()
@@ -75,8 +78,27 @@ st.sidebar.number_input(
 st.sidebar.markdown("---")
 if not df.empty:
     st.sidebar.header("Manage Data")
-    st.sidebar.number_input("Row ID to Delete", min_value=1, max_value=len(df), step=1, key="row_to_delete")
+    
+    # Adding on_change here allows pressing ENTER to delete
+    st.sidebar.number_input(
+        "Row ID to Delete", 
+        min_value=1, 
+        max_value=len(df), 
+        step=1, 
+        value=None,
+        placeholder="Enter ID...",
+        key="row_to_delete",
+        on_change=delete_row
+    )
     st.sidebar.button("Remove Row", on_click=delete_row)
+
+    # Show delete status in sidebar
+    if st.session_state.get("last_deleted"):
+        st.sidebar.success(st.session_state.last_deleted)
+        st.session_state.last_deleted = ""
+    if st.session_state.get("delete_error"):
+        st.sidebar.error(st.session_state.delete_error)
+        st.session_state.delete_error = ""
 
 st.sidebar.button("Refresh Dashboard")
 
