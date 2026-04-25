@@ -13,23 +13,11 @@ st.title("Family Melon Sale Dashboard")
 st.markdown(
     """
     <style>
-    /* 1. Target the specific label instruction text */
-    [data-testid="stWidgetInstructions"] {
+    /* Hides instruction text */
+    [data-testid="stWidgetInstructions"], div[data-testid="stNumberInput"] small {
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-
-    /* 2. Target the specific "small" element within the number input */
-    div[data-testid="stNumberInput"] small {
-        display: none !important;
-    }
-
-    /* 3. A catch-all for any "Press Enter" text in forms */
-    div[data-testid="stForm"] label + div + div {
-        display: none !important;
     }
     </style>
     """,
@@ -45,47 +33,40 @@ gc = gspread.service_account_from_dict(credentials)
 sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing") 
 worksheet = sh.get_worksheet(0)
 
-# --- CALLBACK FUNCTION: Captures data and clears the box ---
-def handle_sale():
-    weight_val = st.session_state.get("weight_input")
-    
-    if weight_val is not None and weight_val > 0:
-        total_price = weight_val * PRICE_PER_KG
+# --- LOGIC: Runs when input changes ---
+def save_data():
+    weight = st.session_state.weight_input
+    if weight is not None and weight > 0:
+        total_price = weight * PRICE_PER_KG
         sale_date = date.today()
         
         # Save to Google Sheets
-        worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
+        worksheet.append_row([str(sale_date), weight, PRICE_PER_KG, total_price])
         
-        # This is the secret fix: Manually clearing the key in session state
-        # so the app doesn't get stuck on the old number
-        st.session_state["weight_input"] = None
-        st.toast(f"Saved {weight_val}kg successfully")
+        # Reset the input box immediately
+        st.session_state.weight_input = None
+        st.toast(f"Saved {weight}kg successfully")
     else:
-        st.error("Please enter a valid weight before confirming")
-        
-# Load data for the dashboard
+        st.error("Please enter a valid weight")
+
+# Load data for dashboard
 data = worksheet.get_all_records()
 df = pd.DataFrame(data)
 
-# --- SIDEBAR ---
+# --- SIDEBAR: Non-Form Version ---
 st.sidebar.header("Log New Sale")
 
-# We keep clear_on_submit=False but handle the clearing manually in the callback
-with st.sidebar.form("sale_form"):
-    sale_date = st.date_input("Date", date.today())
-    
-    st.number_input(
-        "Weight (kg)", 
-        value=None, 
-        placeholder="Type weight here...", 
-        format="%.2f",
-        key="weight_input"  # This links directly to the session_state clear above
-    )
-    
-    st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
-    
-    # Confirm Sale button
-    st.form_submit_button("Confirm Sale", on_click=handle_sale)
+# We use on_change instead of a form button to catch the 'Enter' key immediately
+st.sidebar.number_input(
+    "Weight (kg)", 
+    value=None, 
+    placeholder="Type weight here...", 
+    format="%.2f",
+    key="weight_input",
+    on_change=save_data  # This triggers the save the moment they hit Enter
+)
+
+st.sidebar.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
 
 if st.sidebar.button("Refresh Dashboard"):
     st.rerun()
@@ -96,7 +77,6 @@ if not df.empty and "Total" in df.columns:
     
     df["Total"] = pd.to_numeric(df["Total"], errors='coerce')
     df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce')
-    
     df = df.fillna(0)
     
     col1.metric("Total Revenue", f"RM {df['Total'].sum():,.2f}")
@@ -106,5 +86,3 @@ if not df.empty and "Total" in df.columns:
     st.dataframe(df.sort_values("Date", ascending=False), use_container_width=True)
 elif df.empty:
     st.info("The sheet is currently empty. Start logging to see your stats")
-else:
-    st.error("Header mismatch in Google Sheets. Ensure headers are: Date, Weight_kg, Price_per_kg, Total")
