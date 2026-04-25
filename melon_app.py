@@ -43,8 +43,8 @@ def save_data():
         date_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
         worksheet.append_row([date_str, weight, PRICE_PER_KG, weight * PRICE_PER_KG])
         
-        # FIX: Replaced big green banner with clean toast
-        st.toast(f"Saved {weight}kg successfully", icon="✅")
+        # Clean toast without icons
+        st.toast(f"Saved {weight}kg successfully")
         st.session_state.weight_input = None
     else:
         st.error("Enter a valid weight")
@@ -54,8 +54,8 @@ def delete_row():
     if row_to_del:
         try:
             worksheet.delete_rows(row_to_del + 1)
-            # Clean floating notification
-            st.toast(f"Row {row_to_del} removed successfully", icon="🗑️")
+            # Clean toast without icons
+            st.toast(f"Row {row_to_del} removed successfully")
         except Exception:
             st.error("Delete failed")
 
