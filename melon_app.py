@@ -8,7 +8,7 @@ import pytz
 PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-st.set_page_config(page_title="Family Melon Sale", layout="centered")
+st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
 # --- CSS FIX ---
 st.markdown(
