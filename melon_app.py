@@ -59,5 +59,3 @@ if not df.empty and "Total" in df.columns:
     st.dataframe(df.sort_values("Date", ascending=False), use_container_width=True)
 elif df.empty:
     st.info("The sheet is currently empty. Start logging to see your stats!")
-else:
-    st.error("Check your Google Sheet headers! Make sure they are: Date, Weight_kg, Price_per_kg, Total")
