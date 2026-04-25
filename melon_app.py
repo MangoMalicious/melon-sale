@@ -26,26 +26,31 @@ df = pd.DataFrame(data)
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
-with st.sidebar.form("sale_form", clear_on_submit=True):
+# Removed clear_on_submit to prevent the "0.00 race condition"
+with st.sidebar.form("sale_form"):
     sale_date = st.date_input("Date", date.today())
-    # We remove the step/min_value defaults that might be forcing the reset
-    weight_input = st.number_input("Weight (kg)", format="%.2f")
+    
+    # Capture the input into a variable
+    weight_val = st.number_input("Weight (kg)", min_value=0.0, format="%.2f")
     
     st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
     
     submitted = st.form_submit_button("Confirm Sale")
     
     if submitted:
-        if weight_input > 0:
-            total_price = weight_input * PRICE_PER_KG
-            # Append row directly using the input variable
-            worksheet.append_row([str(sale_date), weight_input, PRICE_PER_KG, total_price])
-            st.sidebar.success(f"Saved {weight_input}kg!")
-            # We use st.switch_page or just let the app naturally refresh 
-            # instead of a forced rerun which can wipe the temp memory
+        if weight_val > 0:
+            # Calculate the total based on the captured weight_val
+            total_price = weight_val * PRICE_PER_KG
+            
+            # Save to Google Sheets
+            worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
+            
+            st.sidebar.success(f"Successfully logged {weight_val}kg!")
+            
+            # Now we manually rerun to refresh the dashboard and clear the form
+            st.rerun()
         else:
-            st.sidebar.warning("Please enter a weight greater than 0")
-
+            st.sidebar.warning("Please enter a valid weight.")
 # --- DASHBOARD ---
 # This ensures that if the sheet is empty, the app doesn't crash
 if not df.empty and "Total" in df.columns:
