@@ -9,25 +9,27 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale", page_icon="🍈")
 st.title("🍈 Family Melon Sale Dashboard")
 
-# --- CUSTOM CSS TO HIDE SUBTEXT ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
-    /* 1. Targets the specific instruction class */
-    .st-emotion-cache-176lth7, .st-emotion-cache-v06xl4, small {
+    /* 1. Target the specific label instruction text */
+    [data-testid="stWidgetInstructions"] {
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
     }
-    
-    /* 2. Specifically targets form subtext in sidebar */
-    [data-testid="stForm"] div[data-testid="stMarkdownContainer"] p small {
+
+    /* 2. Target the specific "small" element within the number input */
+    div[data-testid="stNumberInput"] small {
         display: none !important;
     }
 
-    /* 3. Removes the gap left behind by the hidden text */
-    div[data-testid="stForm"] {
-        gap: 0rem !important;
+    /* 3. A catch-all for any "Press Enter" text in forms */
+    div[data-testid="stForm"] label + div + div {
+        display: none !important;
     }
     </style>
     """,
