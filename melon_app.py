@@ -9,25 +9,21 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale")
 st.title("Family Melon Sale Dashboard")
 
-# --- THE ULTIMATE CSS FIX ---
+# --- THE ULTIMATE CSS FIX (Reinforced) ---
 st.markdown(
     """
     <style>
     /* Hides the 'Press Enter' subtext container permanently */
     [data-testid="stWidgetInstructions"], 
     div[data-testid="stNumberInput"] > div:nth-child(3),
-    section[data-testid="stSidebar"] small {
+    section[data-testid="stSidebar"] small,
+    div[data-testid="stNumberInput"] div[data-testid="caption"] {
         display: none !important;
         visibility: hidden !important;
         height: 0px !important;
         margin: 0px !important;
         padding: 0px !important;
         position: absolute !important;
-    }
-
-    /* Target the specific element that appears after typing */
-    div.stNumberInput div[data-testid="caption"] {
-        display: none !important;
     }
 
     /* Success message styling */
@@ -126,11 +122,14 @@ if not df.empty:
     
     st.subheader("Sales History")
     
-    # 1. Assign correct Row IDs (starting from 1)
-    df.index = range(1, len(df) + 1)
+    # --- TABLE SORT FIX ---
+    # 1. Flip data so latest is at the top
+    df_display = df.iloc[::-1].copy()
     
-    # 2. Sort so the latest entry (highest number) is at the top
-    # This makes Row 5 appear above Row 4, matching the physical sheet row count
-    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
+    # 2. Assign Row IDs in descending order (e.g., 5, 4, 3, 2, 1)
+    # This ensures Row 5 in the table is actually Row 5 in the Sheet
+    df_display.index = range(len(df), 0, -1)
+    
+    st.dataframe(df_display, use_container_width=True)
 else:
     st.info("The sheet is currently empty. Start logging to see your stats")
