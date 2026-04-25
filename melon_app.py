@@ -16,7 +16,7 @@ gc = gspread.service_account_from_dict(credentials)
 
 # Open the sheet
 # IMPORTANT: Use the exact name of your Google Sheet file
-sh = gc.open("Melon Sales Data") 
+sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing") 
 worksheet = sh.get_worksheet(0)
 
 # Load data
