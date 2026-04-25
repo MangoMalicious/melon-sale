@@ -94,8 +94,11 @@ if not df.empty:
     c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    # Simplify: Just set the index to match the sheet rows and show as is
-    df.index = range(1, len(df) + 1)
-    st.dataframe(df, use_container_width=True)
+    
+    # SORT BY LATEST: Reverse data and assign IDs in descending order
+    df_display = df.iloc[::-1].copy()
+    df_display.index = range(len(df), 0, -1)
+    
+    st.dataframe(df_display, use_container_width=True)
 else:
     st.info("No sales logged yet.")
