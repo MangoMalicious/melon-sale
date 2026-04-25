@@ -42,43 +42,52 @@ credentials = dict(st.secrets["gcp_service_account"])
 gc = gspread.service_account_from_dict(credentials)
 
 # Open the sheet
-# IMPORTANT: Use the exact name of your Google Sheet file
 sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing") 
 worksheet = sh.get_worksheet(0)
 
-# Load data
+# --- CALLBACK FUNCTION: This runs the moment 'Enter' or 'Confirm' is pressed ---
+def handle_sale():
+    # Grabs the value directly from the session state key
+    weight_val = st.session_state.get("weight_input")
+    
+    if weight_val is not None and weight_val > 0:
+        total_price = weight_val * PRICE_PER_KG
+        sale_date = date.today()
+        
+        # Save to Google Sheets
+        worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
+        
+        # We don't need a manual rerun here because the form will reset 
+        # naturally after the callback finishes.
+    else:
+        st.toast("⚠️ Please enter a weight first!", icon="❌")
+
+# Load data for the dashboard
 data = worksheet.get_all_records()
 df = pd.DataFrame(data)
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
-with st.sidebar.form("sale_form"):
+# clear_on_submit=True is now safe because the callback grabs data FIRST
+with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Date", date.today())
     
-    # Setting value=None leaves the input blank/empty on load
-    weight_val = st.number_input("Weight (kg)", value=None, placeholder="Type weight here...", format="%.2f")
+    # We use the 'key' parameter to link this input to the callback
+    st.number_input(
+        "Weight (kg)", 
+        value=None, 
+        placeholder="Type weight here...", 
+        format="%.2f",
+        key="weight_input"
+    )
     
     st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
     
-    # In a Streamlit form, pressing 'Enter' while the cursor is in the 
-    # number box will automatically trigger this button.
-    submitted = st.form_submit_button("Confirm Sale (or press Enter)")
-    
-    if submitted:
-        if weight_val is not None and weight_val > 0:
-            total_price = weight_val * PRICE_PER_KG
-            
-            # Save to Google Sheets
-            worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
-            
-            st.sidebar.success(f"Successfully logged {weight_val}kg!")
-            st.rerun()
-        else:
-            st.sidebar.warning("Please enter a weight before confirming.")
-            
+    # on_click ensures the handle_sale function runs with the NEW typed data
+    st.form_submit_button("Confirm Sale", on_click=handle_sale)
+
 # --- DASHBOARD ---
-# This ensures that if the sheet is empty, the app doesn't crash
 if not df.empty and "Total" in df.columns:
     col1, col2 = st.columns(2)
     
@@ -96,3 +105,5 @@ if not df.empty and "Total" in df.columns:
     st.dataframe(df.sort_values("Date", ascending=False), use_container_width=True)
 elif df.empty:
     st.info("The sheet is currently empty. Start logging to see your stats!")
+else:
+    st.error("Header mismatch in Google Sheets. Ensure headers are: Date, Weight_kg, Price_per_kg, Total")
