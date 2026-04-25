@@ -26,31 +26,30 @@ df = pd.DataFrame(data)
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
-# Removed clear_on_submit to prevent the "0.00 race condition"
 with st.sidebar.form("sale_form"):
     sale_date = st.date_input("Date", date.today())
     
-    # Capture the input into a variable
-    weight_val = st.number_input("Weight (kg)", min_value=0.0, format="%.2f")
+    # Setting value=None leaves the input blank/empty on load
+    weight_val = st.number_input("Weight (kg)", value=None, placeholder="Type weight here...", format="%.2f")
     
     st.write(f"Price: **RM {PRICE_PER_KG:.2f}/kg**")
     
-    submitted = st.form_submit_button("Confirm Sale")
+    # In a Streamlit form, pressing 'Enter' while the cursor is in the 
+    # number box will automatically trigger this button.
+    submitted = st.form_submit_button("Confirm Sale (or press Enter)")
     
     if submitted:
-        if weight_val > 0:
-            # Calculate the total based on the captured weight_val
+        if weight_val is not None and weight_val > 0:
             total_price = weight_val * PRICE_PER_KG
             
             # Save to Google Sheets
             worksheet.append_row([str(sale_date), weight_val, PRICE_PER_KG, total_price])
             
             st.sidebar.success(f"Successfully logged {weight_val}kg!")
-            
-            # Now we manually rerun to refresh the dashboard and clear the form
             st.rerun()
         else:
-            st.sidebar.warning("Please enter a valid weight.")
+            st.sidebar.warning("Please enter a weight before confirming.")
+            
 # --- DASHBOARD ---
 # This ensures that if the sheet is empty, the app doesn't crash
 if not df.empty and "Total" in df.columns:
