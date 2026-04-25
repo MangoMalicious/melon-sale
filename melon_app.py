@@ -9,10 +9,11 @@ PRICE_PER_KG = 18.00
 st.set_page_config(page_title="Family Melon Sale")
 st.title("Family Melon Sale Dashboard")
 
-# --- CSS FIX ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
+    /* Hides all subtext and 'Press Enter' hints for a professional POS feel */
     [data-testid="stWidgetInstructions"], 
     div[data-testid="stNumberInput"] > div:nth-child(3),
     section[data-testid="stSidebar"] small,
@@ -23,11 +24,6 @@ st.markdown(
         margin: 0px !important;
         padding: 0px !important;
         position: absolute !important;
-    }
-    .big-success {
-        padding: 20px; background-color: #d4edda; color: #155724;
-        border-radius: 10px; text-align: center; font-weight: bold;
-        font-size: 24px; margin-bottom: 20px;
     }
     </style>
     """,
@@ -47,13 +43,9 @@ def save_data():
         date_str = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
         worksheet.append_row([date_str, weight, PRICE_PER_KG, weight * PRICE_PER_KG])
         
-        # RESET INPUT AND MESSAGES
+        # FIX: Replaced big green banner with clean toast
+        st.toast(f"Saved {weight}kg successfully", icon="✅")
         st.session_state.weight_input = None
-        st.session_state.last_saved = f"Saved {weight}kg successfully"
-        
-        # FIX: Clear the delete notification when a new sale is made
-        if "last_deleted" in st.session_state:
-            st.session_state.last_deleted = ""
     else:
         st.error("Enter a valid weight")
 
@@ -62,12 +54,10 @@ def delete_row():
     if row_to_del:
         try:
             worksheet.delete_rows(row_to_del + 1)
-            st.session_state.last_deleted = f"Row {row_to_del} removed successfully"
-            # Clear any 'Saved' message when deleting
-            if "last_saved" in st.session_state:
-                st.session_state.last_saved = ""
+            # Clean floating notification
+            st.toast(f"Row {row_to_del} removed successfully", icon="🗑️")
         except Exception:
-            st.session_state.delete_error = "Delete failed"
+            st.error("Delete failed")
 
 # Load data
 data = worksheet.get_all_records()
@@ -98,21 +88,9 @@ if not df.empty:
     )
     st.sidebar.button("Remove Row", on_click=delete_row)
 
-    # Display delete notifications in sidebar
-    if st.session_state.get("last_deleted"):
-        st.sidebar.success(st.session_state.last_deleted)
-        st.session_state.last_deleted = ""
-    if st.session_state.get("delete_error"):
-        st.sidebar.error(st.session_state.delete_error)
-        st.session_state.delete_error = ""
-
 st.sidebar.button("Refresh Dashboard")
 
 # --- MAIN DASHBOARD ---
-if st.session_state.get("last_saved"):
-    st.markdown(f'<div class="big-success">{st.session_state.last_saved}</div>', unsafe_allow_html=True)
-    st.session_state.last_saved = ""
-
 if not df.empty:
     df["Total"] = pd.to_numeric(df["Total"], errors='coerce').fillna(0)
     df["Weight_kg"] = pd.to_numeric(df["Weight_kg"], errors='coerce').fillna(0)
@@ -122,6 +100,7 @@ if not df.empty:
     c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
+    # Newest at top, index matches Sheet rows
     df_display = df.iloc[::-1].copy()
     df_display.index = range(len(df), 0, -1)
     st.dataframe(df_display, use_container_width=True)
