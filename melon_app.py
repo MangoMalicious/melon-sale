@@ -36,7 +36,7 @@ sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkO
 worksheet = sh.get_worksheet(0)
 
 # --- CACHED DATA LOADING ---
-@st.cache_data(ttl=10)  # Caches for 10 seconds to keep it snappy but fresh
+@st.cache_data(ttl=10)
 def load_data():
     data = worksheet.get_all_records()
     return pd.DataFrame(data)
@@ -51,8 +51,8 @@ def save_data():
         try:
             worksheet.append_row([date_str, weight, PRICE_PER_KG, total_price])
             st.toast(f"Saved {weight}kg successfully")
-            st.session_state.weight_input = None  # Reset input field
-            st.cache_data.clear()  # Clear cache to show new data immediately
+            st.session_state.weight_input = None
+            st.cache_data.clear()
         except Exception:
             st.error("Connection error. Check Google Sheet.")
     else:
@@ -62,11 +62,10 @@ def delete_row():
     row_to_del = st.session_state.get("row_to_delete")
     if row_to_del:
         try:
-            # +1 because Sheet headers are row 1
             worksheet.delete_rows(row_to_del + 1)
             st.toast(f"Row {row_to_del} removed successfully")
-            st.session_state.row_to_delete = None  # Reset delete field
-            st.cache_data.clear()  # Force data refresh
+            st.session_state.row_to_delete = None
+            st.cache_data.clear()
         except Exception:
             st.error("Delete failed. Row might not exist.")
 
@@ -104,7 +103,21 @@ if not df.empty:
     )
     st.sidebar.button("Remove Row", on_click=delete_row)
 
-# Refresh button now explicitly clears cache
+    # --- DOWNLOAD REPORT FEATURE ---
+    st.sidebar.markdown("---")
+    st.sidebar.header("Reports")
+    
+    # Generate CSV data
+    csv_data = df.to_csv(index=False).encode('utf-8')
+    file_timestamp = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y%m%d_%H%M")
+    
+    st.sidebar.download_button(
+        label="Download Sales Report",
+        data=csv_data,
+        file_name=f"melon_sales_{file_timestamp}.csv",
+        mime="text/csv",
+    )
+
 if st.sidebar.button("Refresh Dashboard"):
     st.cache_data.clear()
     st.rerun()
@@ -119,7 +132,6 @@ if not df.empty:
     c2.metric("Total Weight", f"{df['Weight_kg'].sum():,.2f} kg")
     
     st.subheader("Sales History")
-    # Reverse for latest view
     df_display = df.iloc[::-1].copy()
     df_display.index = range(len(df), 0, -1)
     st.dataframe(df_display, use_container_width=True)
