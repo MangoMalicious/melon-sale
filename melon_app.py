@@ -25,7 +25,7 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- THE SPEED SAVE FUNCTION ---
+# --- SPEED SAVE CALLBACK ---
 def quick_save():
     v = st.session_state.v_num
     w_text = st.session_state.get(f"w_{v}", "")
@@ -33,9 +33,9 @@ def quick_save():
     
     try:
         w_val = float(w_text) if w_text else 0.0
-        # Auto-calc
+        # Auto-calc (Floored)
         std_p = float(math.floor(w_val * PRICE_PER_KG))
-        # Use manual price if they typed one, else use auto-calc
+        # Use manual price if typed, else use calculated
         p_val = float(p_text) if p_text else std_p
 
         if w_val > 0:
@@ -43,38 +43,51 @@ def quick_save():
             ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
             st.toast(f"✅ Saved RM {p_val}")
             st.cache_data.clear()
-            # Reset the boxes
-            st.session_state.v_num += 1
+            st.session_state.v_num += 1 # Forces inputs to clear
         else:
-            st.error("Enter weight first")
+            st.error("Missing weight!")
     except:
-        st.error("Invalid numbers entered")
+        st.error("Check your numbers")
 
-# --- SIDEBAR ---
+# --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 v = st.session_state.v_num
 
-# 1. OPTIONAL: Discount Box (Type this first if needed)
-st.sidebar.text_input(
+# 1. Manual Price (Optional - Type first for discounts)
+manual_price_text = st.sidebar.text_input(
     "Discount Price (Optional)", 
     value="", 
-    placeholder="Type final RM if discount...", 
+    placeholder="Leave blank for auto-calc", 
     key=f"p_{v}"
 )
 
-# 2. WEIGHT (The Trigger)
-# Pressing ENTER here saves the whole thing immediately
-st.sidebar.text_input(
-    "Weight (kg) + Press ENTER", 
+# 2. Weight (The Trigger)
+weight_text = st.sidebar.text_input(
+    "Weight (kg)", 
     value="", 
-    placeholder="Type weight & hit Enter", 
+    placeholder="Type weight & Enter to Save", 
     key=f"w_{v}",
     on_change=quick_save
 )
 
-st.sidebar.info("Just type the weight and hit Enter. The app will calculate RM 20/kg and save it automatically.")
+# --- LIVE PRICE POPUP ---
+try:
+    w_val = float(weight_text) if weight_text else 0.0
+    if w_val > 0:
+        std_p = float(math.floor(w_val * PRICE_PER_KG))
+        
+        # Check if they are overriding with a manual price
+        if manual_price_text:
+            m_val = float(manual_price_text)
+            st.sidebar.warning(f"**Final Total: RM {m_val:.0f}** (Discount Applied)")
+        else:
+            st.sidebar.success(f"**Auto Price: RM {std_p:.0f}** (Press Enter to Save)")
+except:
+    pass
 
-# --- DASHBOARD ---
+st.sidebar.markdown("---")
+
+# --- DATA & DASHBOARD ---
 @st.cache_data(ttl=10)
 def load_recent_data():
     all_values = ws.get_all_values()
@@ -87,12 +100,13 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
-    total_rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
-    total_wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
+    # Basic Metrics
+    rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
+    wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
     
     c1, c2 = st.columns(2)
-    c1.metric("Total Revenue", f"RM {total_rev:,.0f}")
-    c2.metric("Total Weight", f"{total_wgt:,.2f} kg")
+    c1.metric("Total Revenue", f"RM {rev:,.0f}")
+    c2.metric("Total Weight", f"{wgt:,.2f} kg")
     
     st.subheader("Sales History")
     st.dataframe(df, use_container_width=True)
