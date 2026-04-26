@@ -3,7 +3,6 @@ import pandas as pd
 import gspread
 from datetime import datetime
 import pytz
-import io 
 import math 
 
 # CONFIG
@@ -25,68 +24,53 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- SAVE CALLBACK ---
-def quick_save():
-    v = st.session_state.v_num
-    w_text = st.session_state.get(f"w_{v}", "")
-    p_text = st.session_state.get(f"p_{v}", "")
-    
-    try:
-        w_val = float(w_text) if w_text else 0.0
-        std_p = float(math.floor(w_val * PRICE_PER_KG))
-        p_val = float(p_text) if p_text else std_p
-
-        if w_val > 0:
-            date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
-            ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
-            st.cache_data.clear()
-            st.session_state.v_num += 1 
-    except:
-        pass
-
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 v = st.session_state.v_num
 
-# 1. Manual Price (Optional)
-# If you type here, it updates the "preview" in the weight box placeholder
-manual_p = st.sidebar.text_input("Discount Price (Optional)", value="", placeholder="Final RM...", key=f"p_{v}")
-
-# 2. Weight Input (THE MAIN BOX)
-# We get the value from the session state to show the preview in the label
-current_w = st.session_state.get(f"w_{v}", "")
-try:
-    w_float = float(current_w) if current_w else 0.0
-    calc_p = float(math.floor(w_float * PRICE_PER_KG))
-    # If there's a weight, we show the price in the dropdown label
-    label_msg = f"Weight (kg) — [Total: RM {calc_p:.0f}]" if w_float > 0 else "Weight (kg)"
-except:
-    label_msg = "Weight (kg)"
-
-# Typing and hitting ENTER here updates the label (Preview)
-# Hitting ENTER again (without changing the number) triggers the save
-weight_text = st.sidebar.text_input(
-    label_msg, 
+# 1. Manual Price (Type this first if giving a discount)
+manual_p_text = st.sidebar.text_input(
+    "Discount Price (Optional)", 
     value="", 
-    placeholder="Type weight & hit Enter", 
-    key=f"w_{v}",
-    on_change=quick_save
+    placeholder="Final RM...", 
+    key=f"p_{v}"
 )
 
-# 3. EXPANDER (The Dropdown heads-up)
-if weight_text:
-    with st.sidebar.expander("📊 Calculation Details", expanded=True):
-        try:
-            w_val = float(weight_text)
-            std_p = float(math.floor(w_val * PRICE_PER_KG))
-            if manual_p:
-                st.write(f"Original: ~~RM {std_p:.0f}~~")
-                st.write(f"Final: **RM {float(manual_p):.0f}**")
-            else:
-                st.write(f"Total: **RM {std_p:.0f}**")
-            st.info("Hit Enter again in the box to Save")
-        except:
-            st.error("Invalid number")
+# 2. Weight Input (Number Input updates LIVE)
+weight = st.sidebar.number_input(
+    "Weight (kg)", 
+    min_value=0.0, 
+    step=0.1, 
+    format="%.2f",
+    key=f"w_{v}"
+)
+
+# --- THE LIVE PREVIEW DROPDOWN ---
+if weight > 0:
+    std_p = float(math.floor(weight * PRICE_PER_KG))
+    
+    # Logic to determine final price
+    try:
+        final_p = float(manual_p_text) if manual_p_text else std_p
+    except:
+        final_p = std_p
+
+    with st.sidebar.expander("📊 Price Preview (Check Before Saving)", expanded=True):
+        st.write(f"Weight: **{weight} kg**")
+        
+        if manual_p_text:
+            st.write(f"Original: ~~RM {std_p:.0f}~~")
+            st.write(f"**Final Total: RM {final_p:.0f}**")
+        else:
+            st.write(f"**Auto Total: RM {std_p:.0f}**")
+        
+        # This is the ONLY way to save. Clicking outside does nothing.
+        if st.button("Confirm & Save Sale", use_container_width=True):
+            date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
+            ws.append_row([date_str, weight, PRICE_PER_KG, final_p])
+            st.cache_data.clear()
+            st.session_state.v_num += 1 # Reset form
+            st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -105,6 +89,7 @@ st.title("BG Melon Sale")
 if not df.empty:
     rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
     wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
+    
     c1, c2 = st.columns(2)
     c1.metric("Total Revenue", f"RM {rev:,.0f}")
     c2.metric("Total Weight", f"{wgt:,.2f} kg")
