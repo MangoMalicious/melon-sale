@@ -11,10 +11,6 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- INITIALIZE STATE ---
-if "v_num" not in st.session_state:
-    st.session_state.v_num = 0
-
 # Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
@@ -26,55 +22,48 @@ ws = st.session_state.ws
 
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
-v = st.session_state.v_num
 
-# 1. Manual Price (Type this first if giving a discount)
-manual_p_text = st.sidebar.text_input(
-    "Discount Price (Optional)", 
-    value="", 
-    placeholder="Final RM...", 
-    key=f"p_{v}"
-)
+# Wrapping everything in a FORM prevents "Click Off" saving
+with st.sidebar.form("sale_form", clear_on_submit=True):
+    # 1. Weight Input
+    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1, format="%.2f")
+    
+    # 2. Manual Price (Optional)
+    manual_p = st.text_input("Discount Price (RM)", placeholder="Optional...")
 
-# 2. Weight Input (Number Input updates LIVE)
-weight = st.sidebar.number_input(
-    "Weight (kg)", 
-    min_value=0.0, 
-    step=0.1, 
-    format="%.2f",
-    key=f"w_{v}"
-)
-
-# --- THE LIVE PREVIEW DROPDOWN ---
-if weight > 0:
+    # --- LIVE PRICE PREVIEW (No Dropdown) ---
     std_p = float(math.floor(weight * PRICE_PER_KG))
     
-    # Logic to determine final price
-    try:
-        final_p = float(manual_p_text) if manual_p_text else std_p
-    except:
-        final_p = std_p
+    if weight > 0:
+        try:
+            final_p = float(manual_p) if manual_p else std_p
+            # We display the price right here in the form
+            st.markdown(f"### Total: RM {final_p:.0f}")
+        except:
+            st.markdown(f"### Total: RM {std_p:.0f}")
+    else:
+        st.markdown("### Total: RM 0")
 
-    with st.sidebar.expander("📊 Price Preview (Check Before Saving)", expanded=True):
-        st.write(f"Weight: **{weight} kg**")
-        
-        if manual_p_text:
-            st.write(f"Original: ~~RM {std_p:.0f}~~")
-            st.write(f"**Final Total: RM {final_p:.0f}**")
+    # 3. SAVE BUTTON
+    # This is the ONLY thing that triggers a save
+    submitted = st.form_submit_button("Confirm & Save Sale", use_container_width=True)
+
+    if submitted:
+        if weight > 0:
+            try:
+                final_p = float(manual_p) if manual_p else std_p
+                date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
+                ws.append_row([date_str, weight, PRICE_PER_KG, final_p])
+                st.cache_data.clear()
+                st.rerun()
+            except:
+                st.error("Invalid Price")
         else:
-            st.write(f"**Auto Total: RM {std_p:.0f}**")
-        
-        # This is the ONLY way to save. Clicking outside does nothing.
-        if st.button("Confirm & Save Sale", use_container_width=True):
-            date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
-            ws.append_row([date_str, weight, PRICE_PER_KG, final_p])
-            st.cache_data.clear()
-            st.session_state.v_num += 1 # Reset form
-            st.rerun()
+            st.error("Enter weight first")
 
 st.sidebar.markdown("---")
 
-# --- DASHBOARD ---
+# --- DASHBOARD & DATA ---
 @st.cache_data(ttl=10)
 def load_recent_data():
     all_values = ws.get_all_values()
