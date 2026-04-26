@@ -23,47 +23,53 @@ ws = st.session_state.ws
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 
-# Wrapping everything in a FORM prevents "Click Off" saving
+# The Form acts as a safety cage. No data leaves this block until 'Save' is clicked.
 with st.sidebar.form("sale_form", clear_on_submit=True):
-    # 1. Weight Input
+    # 1. Weight Input (Starts at 0.0)
     weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1, format="%.2f")
     
-    # 2. Manual Price (Optional)
-    manual_p = st.text_input("Discount Price (RM)", placeholder="Optional...")
+    # 2. Manual Price (Only use this if you want to override RM 20/kg)
+    manual_p = st.text_input("Final Price RM (Optional override)", placeholder="Leave blank for RM 20/kg")
 
-    # --- LIVE PRICE PREVIEW (No Dropdown) ---
+    # --- PRICE PREVIEW ---
+    # This calculation updates when the app reruns (e.g., when you hit Enter or click off)
+    # but it WILL NOT save to Google Sheets yet.
     std_p = float(math.floor(weight * PRICE_PER_KG))
     
     if weight > 0:
         try:
-            final_p = float(manual_p) if manual_p else std_p
-            # We display the price right here in the form
-            st.markdown(f"### Total: RM {final_p:.0f}")
+            # Check if there is a manual override
+            final_display = float(manual_p) if manual_p else std_p
+            st.write(f"### Total: RM {final_display:.0f}")
         except:
-            st.markdown(f"### Total: RM {std_p:.0f}")
+            st.write(f"### Total: RM {std_p:.0f}")
     else:
-        st.markdown("### Total: RM 0")
+        st.write("### Total: RM 0")
 
-    # 3. SAVE BUTTON
-    # This is the ONLY thing that triggers a save
-    submitted = st.form_submit_button("Confirm & Save Sale", use_container_width=True)
+    # 3. THE ONLY SAVE TRIGGER
+    submitted = st.form_submit_button("Confirm & Save Sale")
 
     if submitted:
         if weight > 0:
             try:
-                final_p = float(manual_p) if manual_p else std_p
+                # Final logic for the sheet
+                final_val = float(manual_p) if manual_p else std_p
                 date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
-                ws.append_row([date_str, weight, PRICE_PER_KG, final_p])
+                
+                # Column mapping: Date, Weight, Rate, Total
+                ws.append_row([date_str, weight, PRICE_PER_KG, final_val])
+                
+                # Success feedback
+                st.success(f"Saved: {weight}kg for RM {final_val}")
                 st.cache_data.clear()
-                st.rerun()
-            except:
-                st.error("Invalid Price")
+            except Exception as e:
+                st.error(f"Save failed: {e}")
         else:
-            st.error("Enter weight first")
+            st.error("Please enter a weight before saving.")
 
 st.sidebar.markdown("---")
 
-# --- DASHBOARD & DATA ---
+# --- DATA & DASHBOARD ---
 @st.cache_data(ttl=10)
 def load_recent_data():
     all_values = ws.get_all_values()
@@ -76,12 +82,15 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
+    # Column 3 (Total RM) and Column 1 (Weight)
     rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
     wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
     
     c1, c2 = st.columns(2)
     c1.metric("Total Revenue", f"RM {rev:,.0f}")
     c2.metric("Total Weight", f"{wgt:,.2f} kg")
+    
+    st.subheader("Recent Sales")
     st.dataframe(df, use_container_width=True)
 else:
-    st.info("No sales logged yet.")
+    st.info("Waiting for first sale...")
