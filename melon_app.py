@@ -12,25 +12,26 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- THE "SCORCHED EARTH" CSS FIX ---
+# --- THE "CLEAN SLATE" CSS ---
 st.markdown(
     """
     <style>
-    /* 1. Target the instruction text specifically */
-    [data-testid="stWidgetInstructions"] {
+    /* Hides ALL widget instructions, sub-captions, and small text across the app */
+    [data-testid="stWidgetInstructions"],
+    div[data-testid="caption"],
+    .st-emotion-cache-1pxm84u,
+    .st-emotion-cache-183060o,
+    .st-emotion-cache-1vt4y65,
+    .st-emotion-cache-zt5igj,
+    small {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
     }
-    /* 2. Target any small caption text that Streamlit uses for 'Press Enter' */
-    div[data-testid="caption"] {
-        display: none !important;
-    }
-    /* 3. Target the specific sub-label container inside input boxes */
-    .st-emotion-cache-1pxm84u, .st-emotion-cache-183060o, .st-emotion-cache-1vt4y65 {
-        display: none !important;
-    }
-    /* 4. Target any 'small' tags or caption-like text in the sidebar */
-    section[data-testid="stSidebar"] small {
-        display: none !important;
+    
+    /* Makes sure the input boxes don't have extra space from the hidden text */
+    div[data-baseweb="input"] {
+        margin-bottom: 5px !important;
     }
     </style>
     """,
@@ -70,39 +71,33 @@ st.sidebar.header("Log New Sale")
 with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
     
-    weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
+    # We are using text_input to keep it blank, but adding a float check
+    weight_text = st.text_input("Weight (kg)", value="", placeholder=" ")
     
     try:
         weight = float(weight_text) if weight_text else 0.0
     except ValueError:
         weight = 0.0
     
+    # Suggested Price calculation
     calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
     
-    price_placeholder = f"Calculated: RM {calc_price:.0f}" if weight > 0 else "Enter price..."
-    price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
-    
-    try:
-        if not price_text and weight > 0:
-            final_price = calc_price
-        else:
-            final_price = float(price_text) if price_text else 0.0
-    except ValueError:
-        final_price = 0.0
+    # Using a number_input for price but we'll try to hide its subtext too
+    final_price = st.number_input("Final Price (RM)", min_value=0.0, value=calc_price, step=1.0)
     
     submitted = st.form_submit_button("Save Sale")
     
     if submitted:
-        if weight > 0 and final_price > 0:
+        if weight > 0:
             date_str = sale_date.strftime("%d-%m-%Y") 
-            ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
+            ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
             st.toast(f"Saved: {weight}kg for RM {final_price}")
             st.cache_data.clear()
             st.rerun()
         else:
-            st.error("Enter both Weight and Price")
+            st.error("Enter weight")
 
-# --- MANAGE & REPORTS ---
+# --- REPORTS ---
 df = load_recent_data()
 rev_total, wgt_total = get_totals()
 
@@ -110,7 +105,7 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.text_input("Enter ID to Delete", value="")
+        row_to_del = st.text_input("Enter ID", value="")
         if st.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
@@ -127,13 +122,12 @@ if not df.empty:
         df.to_excel(writer, index=False, sheet_name='Sales')
     
     st.sidebar.download_button(
-        label="Download Excel Report",
+        label="Download Excel",
         data=buffer.getvalue(),
-        file_name=f"bg_melon_sales.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        file_name="bg_melon_sales.xlsx"
     )
 
-# --- MAIN DASHBOARD ---
+# --- DASHBOARD ---
 st.title("BG Melon Sale")
 
 if not df.empty:
