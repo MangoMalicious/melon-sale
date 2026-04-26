@@ -7,7 +7,7 @@ import io
 import math 
 
 # CONFIG
-PRICE_PER_KG = 18.00
+PRICE_PER_KG = 20.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
