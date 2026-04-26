@@ -25,68 +25,74 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- SAVE FUNCTION (Called on Enter) ---
+# --- SAVE LOGIC ---
 def save_sale_callback():
     v = st.session_state.v_num
-    # Get current values from state
     w_text = st.session_state.get(f"w_{v}", "")
     p_text = st.session_state.get(f"p_{v}", "")
     
     try:
         w_val = float(w_text) if w_text else 0.0
-    except:
-        w_val = 0.0
-        
-    # Logic: if price is blank, use calculated price
-    calc_p = float(math.floor(w_val * PRICE_PER_KG))
-    try:
+        # Calc standard price
+        calc_p = float(math.floor(w_val * PRICE_PER_KG))
+        # Use manual price if entered, else use calculated
         p_val = float(p_text) if p_text else calc_p
-    except:
-        p_val = calc_p
 
-    if w_val > 0 and p_val > 0:
-        date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
-        ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
-        st.toast(f"✅ Saved RM {p_val}")
-        st.cache_data.clear()
-        # Reset form by changing version
-        st.session_state.v_num += 1
-    else:
-        st.error("Missing Weight or Price")
+        if w_val > 0:
+            date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
+            # Columns: Date, Weight, Rate, Final Total
+            ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
+            st.toast(f"✅ Saved RM {p_val}")
+            st.cache_data.clear()
+            st.session_state.v_num += 1
+        else:
+            st.error("Enter weight first!")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 v = st.session_state.v_num
 
-# 1. Weight Input
-# Pressing Enter here triggers a rerun, which calculates the placeholder
-weight_text = st.sidebar.text_input(
+# 1. WEIGHT (Starts blank)
+weight_input = st.sidebar.text_input(
     "Weight (kg)", 
     value="", 
     placeholder="Enter weight...", 
     key=f"w_{v}"
 )
 
-try:
-    weight = float(weight_text) if weight_text else 0.0
-except:
-    weight = 0.0
-
-# 2. Calculation
-calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
-p_placeholder = f"RM {calc_price:.0f} (Enter to save)" if weight > 0 else "Enter price..."
-
-# 3. Price Input (THE TRIGGER)
-# 'on_change' runs the save_sale_callback the moment Enter is pressed
-st.sidebar.text_input(
+# 2. PRICE (Starts blank)
+price_input = st.sidebar.text_input(
     "Final Price (RM)", 
     value="", 
-    placeholder=p_placeholder, 
-    key=f"p_{v}",
-    on_change=save_sale_callback
+    placeholder="Leave blank for auto-calc", 
+    key=f"p_{v}"
 )
 
-st.sidebar.button("Manual Save", on_click=save_sale_callback)
+# --- REAL-TIME DISCOUNT CHECK ---
+try:
+    w_float = float(weight_input) if weight_input else 0.0
+    p_float = float(price_input) if price_input else 0.0
+    std_price = float(math.floor(w_float * PRICE_PER_KG))
+    
+    if w_float > 0:
+        if p_float > 0 and p_float < std_price:
+            diff = std_price - p_float
+            pct = (diff / std_price) * 100
+            st.sidebar.warning(f"Discount: -RM {diff:.0f} ({pct:.1f}%)")
+        elif p_float == 0:
+            st.sidebar.info(f"Standard Price: RM {std_price:.0f}")
+except:
+    pass
+
+# 3. THE TRIGGER
+if st.sidebar.button("Save Sale (or hit Enter)"):
+    save_sale_callback()
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.caption("Tip: Hit Enter in either box to update the calculation or Save.")
 
 # --- DASHBOARD & DATA ---
 @st.cache_data(ttl=10)
@@ -101,12 +107,15 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
+    # Use standard pandas conversion for metrics
+    total_rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
+    total_wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Total Revenue", f"RM {total_rev:,.0f}")
+    c2.metric("Total Weight", f"{total_wgt:,.2f} kg")
+    
     st.subheader("Sales History")
     st.dataframe(df, use_container_width=True)
-    
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False)
-    st.sidebar.download_button("Download Excel", data=buffer.getvalue(), file_name="sales.xlsx")
 else:
     st.info("No sales logged yet.")
