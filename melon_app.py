@@ -12,6 +12,10 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
+# --- INITIALIZE RESET TRACKER ---
+if "v_num" not in st.session_state:
+    st.session_state.v_num = 0
+
 # Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
@@ -42,44 +46,47 @@ def get_totals():
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 
-# clear_on_submit=True ensures the boxes go blank after saving
-with st.sidebar.form("sale_form", clear_on_submit=True):
-    sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
-    
-    # Weight starts blank
-    weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
-    
-    try:
-        weight = float(weight_text) if weight_text else 0.0
-    except ValueError:
-        weight = 0.0
-    
-    # Auto-calculate suggested price
-    calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
-    
-    # Price also starts blank. If user leaves it blank, we use calc_price.
-    price_placeholder = f"Calculated: RM {calc_price:.0f}" if weight > 0 else "Enter price..."
-    price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
-    
-    try:
-        if not price_text and weight > 0:
-            final_price = calc_price
-        else:
-            final_price = float(price_text) if price_text else 0.0
-    except ValueError:
-        final_price = 0.0
-    
-    submitted = st.form_submit_button("Save Sale")
-    
-    if submitted:
-        if weight > 0 and final_price > 0:
-            date_str = sale_date.strftime("%d-%m-%Y") 
-            ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
-            st.toast(f"Saved: {weight}kg for RM {final_price}")
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            st.error("Please enter weight and price")
+# Current version number to handle resets
+v = st.session_state.v_num
+
+sale_date = st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
+
+# Weight Input - Starts Blank
+weight_text = st.sidebar.text_input("Weight (kg)", value="", placeholder="Enter weight...", key=f"w_{v}")
+
+try:
+    weight = float(weight_text) if weight_text else 0.0
+except ValueError:
+    weight = 0.0
+
+# Auto-calculate suggested price
+calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
+
+# Price Input - Starts Blank
+price_placeholder = f"RM {calc_price:.0f}" if weight > 0 else "Enter price..."
+price_text = st.sidebar.text_input("Final Price (RM)", value="", placeholder=price_placeholder, key=f"p_{v}")
+
+try:
+    if not price_text and weight > 0:
+        final_price = calc_price
+    else:
+        final_price = float(price_text) if price_text else 0.0
+except ValueError:
+    final_price = 0.0
+
+# SAVE ACTION
+if st.sidebar.button("Save Sale"):
+    if weight > 0 and final_price > 0:
+        date_str = sale_date.strftime("%d-%m-%Y") 
+        ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
+        st.toast(f"Saved: {weight}kg for RM {final_price}")
+        st.cache_data.clear()
+        
+        # Increment version number to force the inputs to clear/reset
+        st.session_state.v_num += 1
+        st.rerun()
+    else:
+        st.sidebar.error("Enter weight and price")
 
 # --- MANAGE & REPORTS ---
 df = load_recent_data()
@@ -89,15 +96,15 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.text_input("Enter ID to Delete", value="")
-        if st.button("Confirm Delete"):
+        row_to_del = st.sidebar.text_input("Enter ID", value="", key="del_box")
+        if st.sidebar.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
                 st.toast("Deleted")
                 st.cache_data.clear()
                 st.rerun()
             except:
-                st.error("Invalid ID")
+                st.sidebar.error("Invalid ID")
 
     st.sidebar.markdown("---")
     st.sidebar.header("Reports")
