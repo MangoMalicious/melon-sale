@@ -29,7 +29,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Auth
+# Auth with Persistence
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -58,20 +58,18 @@ def get_totals():
 
 # --- ACTIONS ---
 def save_data():
-    weight = st.session_state.weight_input
-    # Use the manually entered price if changed, else use calculated
-    final_price = st.session_state.price_input 
-    selected_date = st.session_state.date_input
+    # Use .get() to avoid key errors if widgets haven't rendered yet
+    weight = st.session_state.get("weight_input")
+    final_price = st.session_state.get("price_input") 
+    selected_date = st.session_state.get("date_input")
     
     if weight and weight > 0 and final_price is not None:
         date_str = selected_date.strftime("%d-%m-%Y") 
         ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
         st.toast(f"Saved: {weight}kg for RM {final_price}")
-        
-        # Reset inputs
-        st.session_state.weight_input = None
-        st.session_state.price_input = 0.0
         st.cache_data.clear()
+    else:
+        st.error("Invalid entry")
 
 def delete_row():
     idx_to_del = st.session_state.get("row_to_delete")
@@ -93,7 +91,6 @@ st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-# Weight Input
 weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
@@ -102,12 +99,11 @@ weight = st.sidebar.number_input(
     key="weight_input"
 )
 
-# Dynamic Price calculation (Rounded Down)
+# Suggested Price Logic (Floor rounding)
 suggested_price = 0.0
 if weight:
     suggested_price = float(math.floor(weight * PRICE_PER_KG))
 
-# Price Input (Allows manual discount override)
 st.sidebar.number_input(
     "Final Price (RM)", 
     min_value=0.0, 
@@ -165,8 +161,10 @@ with dashboard.container():
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
+        
         df_display = df.copy()
         df_display.index = range(len(df))
+        
         st.dataframe(df_display, use_container_width=True)
     else:
         st.info("No sales logged yet.")
