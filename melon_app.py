@@ -12,6 +12,19 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
+# --- CSS TO HIDE SUBTEXT ONLY ---
+st.markdown(
+    """
+    <style>
+    /* Hides the 'Please press enter to submit' subtext */
+    [data-testid="stWidgetInstructions"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
@@ -56,12 +69,11 @@ with st.sidebar.form("sale_form", clear_on_submit=True):
     # Auto-calculate suggested price
     calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
     
-    # Price also starts blank but shows the calculated value as a placeholder if weight is entered
-    price_placeholder = f"RM {calc_price:.0f}" if weight > 0 else "Enter price..."
+    # Price also starts blank but hints at the calc price in placeholder
+    price_placeholder = f"Calculated: RM {calc_price:.0f}" if weight > 0 else "Enter price..."
     price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
     
     try:
-        # If user leaves Price blank but entered Weight, use the calculated price
         if not price_text and weight > 0:
             final_price = calc_price
         else:
