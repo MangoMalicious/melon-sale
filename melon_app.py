@@ -58,6 +58,7 @@ def get_totals():
 
 # --- ACTIONS ---
 def save_data():
+    # Fetch from state
     weight = st.session_state.get("weight_input")
     final_price = st.session_state.get("price_input") 
     selected_date = st.session_state.get("date_input")
@@ -67,10 +68,7 @@ def save_data():
         ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
         st.toast(f"Saved: {weight}kg for RM {final_price}")
         st.cache_data.clear()
-        
-        # Clear inputs for next entry
-        st.session_state["weight_input"] = 0.0
-        st.session_state["price_input"] = 0.0
+        # WE REMOVED the lines that manually set session_state values to 0.0
     else:
         st.error("Invalid entry")
 
@@ -81,7 +79,6 @@ def delete_row():
             sheet_row = int(idx_to_del) + 2
             ws.delete_rows(sheet_row)
             st.toast(f"ID {idx_to_del} removed")
-            st.session_state.row_to_delete = 0
             st.cache_data.clear()
         except Exception:
             st.error("Delete failed")
@@ -94,7 +91,7 @@ st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-# Use a default 0.0 but allow it to trigger a change
+# 1. Weight Input (Triggers rerun on change)
 weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
@@ -102,30 +99,25 @@ weight = st.sidebar.number_input(
     key="weight_input"
 )
 
-# Calculation logic that runs EVERY time the script reruns
-if weight > 0:
+# 2. Logic: If weight is keyed in, calculate suggested price
+if weight and weight > 0:
     calc_price = float(math.floor(weight * PRICE_PER_KG))
 else:
     calc_price = 0.0
 
-# This is the "Magic" fix:
-# If the weight was just changed, we update the price_input state manually
-if "last_weight" not in st.session_state:
-    st.session_state.last_weight = 0.0
-
-if weight != st.session_state.last_weight:
-    st.session_state.price_input = calc_price
-    st.session_state.last_weight = weight
-
+# 3. Final Price Input 
+# We use calc_price as the 'value'. This solves the 0.00 deletion bug instantly.
 st.sidebar.number_input(
     "Final Price (RM)", 
     min_value=0.0, 
+    value=calc_price, 
     step=1.0, 
     key="price_input"
 )
 
 if st.sidebar.button("Save Sale"):
     save_data()
+    # 4. The Clean Reset: This clears all widgets back to their defaults (0.0 or None)
     st.rerun()
 
 if not df.empty:
