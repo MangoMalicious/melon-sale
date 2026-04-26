@@ -17,9 +17,7 @@ st.markdown(
     """
     <style>
     [data-testid="stWidgetInstructions"], 
-    div[data-testid="stNumberInput"] > div:nth-child(3),
-    section[data-testid="stSidebar"] small,
-    div[data-testid="stNumberInput"] div[data-testid="caption"] {
+    section[data-testid="stSidebar"] small {
         display: none !important;
     }
     </style>
@@ -57,17 +55,24 @@ def get_totals():
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 
-# Using a form ensures all inputs reset to their default (0.0) upon submission
 with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
     
-    # We use a neutral key here. Since it's in a form, we don't need shadow keys.
-    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1, value=0.0)
+    # Using text_input with value="" makes it start BLANK
+    weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
     
-    # Calculation still happens live in the script run
+    # Process the text into a number safely
+    try:
+        weight = float(weight_text) if weight_text else 0.0
+    except ValueError:
+        weight = 0.0
+        st.error("Please enter a valid number for weight")
+    
+    # Calculation
     calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
     
-    # Parents can override this if needed
+    # We keep price as a number_input so it's easy to adjust, 
+    # but it will update to the calculated price as soon as weight is typed.
     final_price = st.number_input("Final Price (RM)", min_value=0.0, step=1.0, value=calc_price)
     
     submitted = st.form_submit_button("Save Sale")
@@ -80,7 +85,7 @@ with st.sidebar.form("sale_form", clear_on_submit=True):
             st.cache_data.clear()
             st.rerun()
         else:
-            st.error("Please enter a weight")
+            st.error("Please enter a weight before saving")
 
 # --- MANAGE & REPORTS ---
 df = load_recent_data()
@@ -90,11 +95,11 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.number_input("Enter ID", min_value=0, step=1)
+        row_to_del = st.number_input("Enter ID to Delete", min_value=0, step=1)
         if st.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
-                st.toast("Deleted successfully")
+                st.toast("Deleted")
                 st.cache_data.clear()
                 st.rerun()
             except:
