@@ -25,7 +25,7 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- SPEED SAVE CALLBACK ---
+# --- SAVE CALLBACK ---
 def quick_save():
     v = st.session_state.v_num
     w_text = st.session_state.get(f"w_{v}", "")
@@ -33,9 +33,8 @@ def quick_save():
     
     try:
         w_val = float(w_text) if w_text else 0.0
-        # Auto-calc (Floored)
         std_p = float(math.floor(w_val * PRICE_PER_KG))
-        # Use manual price if typed, else use calculated
+        # Use manual price if typed, otherwise use calculated
         p_val = float(p_text) if p_text else std_p
 
         if w_val > 0:
@@ -43,21 +42,21 @@ def quick_save():
             ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
             st.toast(f"✅ Saved RM {p_val}")
             st.cache_data.clear()
-            st.session_state.v_num += 1 # Forces inputs to clear
+            st.session_state.v_num += 1 
         else:
-            st.error("Missing weight!")
+            st.error("Enter weight!")
     except:
-        st.error("Check your numbers")
+        st.error("Check numbers")
 
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 v = st.session_state.v_num
 
-# 1. Manual Price (Optional - Type first for discounts)
+# 1. Manual Price (Optional)
 manual_price_text = st.sidebar.text_input(
     "Discount Price (Optional)", 
     value="", 
-    placeholder="Leave blank for auto-calc", 
+    placeholder="Type final RM here...", 
     key=f"p_{v}"
 )
 
@@ -65,29 +64,34 @@ manual_price_text = st.sidebar.text_input(
 weight_text = st.sidebar.text_input(
     "Weight (kg)", 
     value="", 
-    placeholder="Type weight & Enter to Save", 
+    placeholder="Type & hit Enter to Save", 
     key=f"w_{v}",
     on_change=quick_save
 )
 
-# --- LIVE PRICE POPUP ---
+# --- THE "HEADS UP" DROPDOWN ---
 try:
     w_val = float(weight_text) if weight_text else 0.0
     if w_val > 0:
         std_p = float(math.floor(w_val * PRICE_PER_KG))
         
-        # Check if they are overriding with a manual price
-        if manual_price_text:
-            m_val = float(manual_price_text)
-            st.sidebar.warning(f"**Final Total: RM {m_val:.0f}** (Discount Applied)")
-        else:
-            st.sidebar.success(f"**Auto Price: RM {std_p:.0f}** (Press Enter to Save)")
+        with st.sidebar.expander("📊 Calculation Preview", expanded=True):
+            if manual_price_text:
+                m_val = float(manual_price_text)
+                st.write(f"Weight: **{w_val} kg**")
+                st.write(f"Original: ~~RM {std_p:.0f}~~")
+                st.write(f"Discounted: **RM {m_val:.0f}**")
+            else:
+                st.write(f"Weight: **{w_val} kg**")
+                st.write(f"Rate: **RM {PRICE_PER_KG:.0f}/kg**")
+                st.write(f"Total: **RM {std_p:.0f}**")
+                st.caption("Hit Enter to Save")
 except:
     pass
 
 st.sidebar.markdown("---")
 
-# --- DATA & DASHBOARD ---
+# --- DASHBOARD & DATA ---
 @st.cache_data(ttl=10)
 def load_recent_data():
     all_values = ws.get_all_values()
@@ -100,7 +104,7 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
-    # Basic Metrics
+    # Quick calculations for metrics
     rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
     wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
     
