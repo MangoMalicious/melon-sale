@@ -12,13 +12,20 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- CSS TO HIDE SUBTEXT ONLY ---
+# --- AGGRESSIVE CSS FIX ---
 st.markdown(
     """
     <style>
-    /* Hides the 'Please press enter to submit' subtext */
-    [data-testid="stWidgetInstructions"] {
+    /* Hides the 'Press Enter' instructions and small subtext captions */
+    [data-testid="stWidgetInstructions"], 
+    .st-emotion-cache-1pxm84u, 
+    small {
         display: none !important;
+    }
+    /* Ensures the form looks clean on mobile */
+    div[data-testid="stForm"] {
+        border: none !important;
+        padding: 0 !important;
     }
     </style>
     """,
@@ -58,7 +65,6 @@ st.sidebar.header("Log New Sale")
 with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
     
-    # Weight starts blank
     weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
     
     try:
@@ -66,10 +72,8 @@ with st.sidebar.form("sale_form", clear_on_submit=True):
     except ValueError:
         weight = 0.0
     
-    # Auto-calculate suggested price
     calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
     
-    # Price also starts blank but hints at the calc price in placeholder
     price_placeholder = f"Calculated: RM {calc_price:.0f}" if weight > 0 else "Enter price..."
     price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
     
