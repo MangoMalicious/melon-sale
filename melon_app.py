@@ -35,6 +35,9 @@ if 'ws' not in st.session_state:
     gc = gspread.service_account_from_dict(creds)
     sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1g2zv0E68IMtvDTmaqkOhr1QdGhGUTitBzfoLjnTmiX0/edit?usp=sharing")
     st.session_state.ws = sh.get_worksheet(0)
+    # Initialize a form version tracker to handle resets
+    if "form_version" not in st.session_state:
+        st.session_state.form_version = 0
 
 ws = st.session_state.ws
 
@@ -58,9 +61,10 @@ def get_totals():
 
 # --- ACTIONS ---
 def save_data():
-    # Fetch from state
-    weight = st.session_state.get("weight_input")
-    final_price = st.session_state.get("price_input") 
+    # Use dynamic keys based on form_version
+    ver = st.session_state.form_version
+    weight = st.session_state.get(f"weight_{ver}")
+    final_price = st.session_state.get(f"price_{ver}") 
     selected_date = st.session_state.get("date_input")
     
     if weight and weight > 0:
@@ -68,69 +72,67 @@ def save_data():
         ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
         st.toast(f"Saved: {weight}kg for RM {final_price}")
         st.cache_data.clear()
-        # WE REMOVED the lines that manually set session_state values to 0.0
+        
+        # INCREMENT version to reset widgets on next rerun
+        st.session_state.form_version += 1
     else:
         st.error("Invalid entry")
-
-def delete_row():
-    idx_to_del = st.session_state.get("row_to_delete")
-    if idx_to_del is not None:
-        try:
-            sheet_row = int(idx_to_del) + 2
-            ws.delete_rows(sheet_row)
-            st.toast(f"ID {idx_to_del} removed")
-            st.cache_data.clear()
-        except Exception:
-            st.error("Delete failed")
-
-df = load_recent_data()
-rev_total, wgt_total = get_totals()
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-# 1. Weight Input (Triggers rerun on change)
+# Use current form version for the keys
+v = st.session_state.form_version
+
+# 1. Weight Input
 weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
     step=0.1, 
-    key="weight_input"
+    key=f"weight_{v}"
 )
 
-# 2. Logic: If weight is keyed in, calculate suggested price
-if weight and weight > 0:
-    calc_price = float(math.floor(weight * PRICE_PER_KG))
-else:
-    calc_price = 0.0
+# 2. Logic: Calculate suggested price
+calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight and weight > 0 else 0.0
 
-# 3. Final Price Input 
-# We use calc_price as the 'value'. This solves the 0.00 deletion bug instantly.
+# 3. Final Price Input (Updates instantly when weight is typed)
 st.sidebar.number_input(
     "Final Price (RM)", 
     min_value=0.0, 
     value=calc_price, 
     step=1.0, 
-    key="price_input"
+    key=f"price_{v}"
 )
 
 if st.sidebar.button("Save Sale"):
     save_data()
-    # 4. The Clean Reset: This clears all widgets back to their defaults (0.0 or None)
     st.rerun()
 
+# --- THE REST OF THE DASHBOARD ---
 if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
-    st.sidebar.number_input("Enter ID to Delete", min_value=0, step=1, key="row_to_delete", on_change=delete_row)
+    # Delete still uses a static key as it doesn't need auto-resetting like the calculator
+    st.sidebar.number_input("Enter ID to Delete", min_value=0, step=1, key="row_to_delete")
+    if st.sidebar.button("Confirm Delete"):
+        idx_to_del = st.session_state.get("row_to_delete")
+        if idx_to_del is not None:
+            try:
+                sheet_row = int(idx_to_del) + 2
+                ws.delete_rows(sheet_row)
+                st.toast(f"ID {idx_to_del} removed")
+                st.cache_data.clear()
+                st.rerun()
+            except:
+                st.error("Delete failed")
 
     st.sidebar.markdown("---")
     st.sidebar.header("Reports")
-    
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sales')
+        load_recent_data().to_excel(writer, index=False, sheet_name='Sales')
     
     current_date_str = datetime.now(MY_TZ).strftime('%d-%m-%Y')
     st.sidebar.download_button(
@@ -146,6 +148,8 @@ if st.sidebar.button("Refresh Dashboard"):
 
 # --- MAIN DASHBOARD ---
 st.title("BG Melon Sale")
+df = load_recent_data()
+rev_total, wgt_total = get_totals()
 
 dashboard = st.empty()
 with dashboard.container():
