@@ -12,22 +12,25 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- THE ULTIMATE CSS FIX ---
+# --- THE "SCORCHED EARTH" CSS FIX ---
 st.markdown(
     """
     <style>
-    /* Target the specific caption class and instruction data-testids */
-    [data-testid="stWidgetInstructions"],
-    [data-testid="caption"],
-    .st-emotion-cache-1pxm84u,
-    .st-emotion-cache-183060o,
-    small {
+    /* 1. Target the instruction text specifically */
+    [data-testid="stWidgetInstructions"] {
         display: none !important;
     }
-    /* Removes border and padding from form to keep it tight */
-    div[data-testid="stForm"] {
-        border: none !important;
-        padding: 0 !important;
+    /* 2. Target any small caption text that Streamlit uses for 'Press Enter' */
+    div[data-testid="caption"] {
+        display: none !important;
+    }
+    /* 3. Target the specific sub-label container inside input boxes */
+    .st-emotion-cache-1pxm84u, .st-emotion-cache-183060o, .st-emotion-cache-1vt4y65 {
+        display: none !important;
+    }
+    /* 4. Target any 'small' tags or caption-like text in the sidebar */
+    section[data-testid="stSidebar"] small {
+        display: none !important;
     }
     </style>
     """,
