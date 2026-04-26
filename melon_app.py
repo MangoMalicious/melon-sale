@@ -12,7 +12,7 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- INITIALIZE RESET TRACKER ---
+# --- INITIALIZE STATE ---
 if "v_num" not in st.session_state:
     st.session_state.v_num = 0
 
@@ -43,15 +43,24 @@ def get_totals():
     except:
         return 0.0, 0.0
 
+# --- SAVE LOGIC ---
+def trigger_save(w, p, d):
+    if w > 0 and p > 0:
+        date_str = d.strftime("%d-%m-%Y") 
+        ws.append_row([date_str, w, PRICE_PER_KG, p])
+        st.toast(f"Saved: {w}kg for RM {p}")
+        st.cache_data.clear()
+        st.session_state.v_num += 1
+        st.rerun()
+
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
-
-# Current version number to handle resets
 v = st.session_state.v_num
 
 sale_date = st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-# Weight Input - Starts Blank
+# 1. Weight Input
+# Pressing Enter here calculates the price
 weight_text = st.sidebar.text_input("Weight (kg)", value="", placeholder="Enter weight...", key=f"w_{v}")
 
 try:
@@ -59,13 +68,20 @@ try:
 except ValueError:
     weight = 0.0
 
-# Auto-calculate suggested price
+# 2. Price Calculation
 calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
-
-# Price Input - Starts Blank
 price_placeholder = f"RM {calc_price:.0f}" if weight > 0 else "Enter price..."
-price_text = st.sidebar.text_input("Final Price (RM)", value="", placeholder=price_placeholder, key=f"p_{v}")
 
+# 3. Price Input (THE TRIGGER)
+# We use the on_change callback so that pressing Enter here saves the sale
+price_text = st.sidebar.text_input(
+    "Final Price (RM)", 
+    value="", 
+    placeholder=price_placeholder, 
+    key=f"p_{v}"
+)
+
+# Determine final price to save
 try:
     if not price_text and weight > 0:
         final_price = calc_price
@@ -74,21 +90,12 @@ try:
 except ValueError:
     final_price = 0.0
 
-# SAVE ACTION
-if st.sidebar.button("Save Sale"):
-    if weight > 0 and final_price > 0:
-        date_str = sale_date.strftime("%d-%m-%Y") 
-        ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
-        st.toast(f"Saved: {weight}kg for RM {final_price}")
-        st.cache_data.clear()
-        
-        # Increment version number to force the inputs to clear/reset
-        st.session_state.v_num += 1
-        st.rerun()
-    else:
-        st.sidebar.error("Enter weight and price")
+# Manual Save Button (as backup)
+if st.sidebar.button("Save Sale") or (st.session_state.get(f"p_{v}") and weight > 0):
+    # This logic checks if the price box was "Entered"
+    trigger_save(weight, final_price, sale_date)
 
-# --- MANAGE & REPORTS ---
+# --- DASHBOARD & REPORTS ---
 df = load_recent_data()
 rev_total, wgt_total = get_totals()
 
@@ -96,7 +103,7 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.sidebar.text_input("Enter ID", value="", key="del_box")
+        row_to_del = st.sidebar.text_input("Enter ID", key="del_box")
         if st.sidebar.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
@@ -111,34 +118,13 @@ if not df.empty:
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sales')
-    
-    st.sidebar.download_button(
-        label="Download Excel Report",
-        data=buffer.getvalue(),
-        file_name=f"bg_melon_sales.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    st.sidebar.download_button("Download Excel", data=buffer.getvalue(), file_name="sales.xlsx")
 
-# --- MAIN DASHBOARD ---
 st.title("BG Melon Sale")
-
 if not df.empty:
-    total_col = "Total(RM)" if "Total(RM)" in df.columns else "Total"
-    weight_col = "Weight(kg)" if "Weight(kg)" in df.columns else "Weight_kg"
-    
-    df[total_col] = pd.to_numeric(df[total_col], errors='coerce').fillna(0)
-    df[weight_col] = pd.to_numeric(df[weight_col], errors='coerce').fillna(0)
-    
-    display_rev = rev_total if rev_total > 0 else df[total_col].sum()
-    display_wgt = wgt_total if wgt_total > 0 else df[weight_col].sum()
-
     c1, c2 = st.columns(2)
-    c1.metric("Total Revenue", f"RM {display_rev:,.0f}")
-    c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
-    
-    st.subheader("Sales History")
-    df_display = df.copy()
-    df_display.index = range(len(df))
-    st.dataframe(df_display, use_container_width=True)
+    c1.metric("Total Revenue", f"RM {rev_total:,.0f}")
+    c2.metric("Total Weight", f"{wgt_total:,.2f} kg")
+    st.dataframe(df, use_container_width=True)
 else:
     st.info("No sales logged yet.")
