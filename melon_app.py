@@ -4,10 +4,10 @@ import gspread
 from datetime import datetime
 import pytz
 import io 
-import math # Added for rounding down
+import math 
 
 # CONFIG
-PRICE_PER_KG = 20.00
+PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
@@ -59,21 +59,19 @@ def get_totals():
 # --- ACTIONS ---
 def save_data():
     weight = st.session_state.weight_input
+    # Use the manually entered price if changed, else use calculated
+    final_price = st.session_state.price_input 
     selected_date = st.session_state.date_input
     
-    if weight and weight > 0:
+    if weight and weight > 0 and final_price is not None:
         date_str = selected_date.strftime("%d-%m-%Y") 
+        ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
+        st.toast(f"Saved: {weight}kg for RM {final_price}")
         
-        # LOGIC CHANGE: Round down to the nearest Ringgit (Floor)
-        # Example: 2.51kg * RM18 = RM45.18 -> Becomes RM45.00
-        final_total = math.floor(weight * PRICE_PER_KG)
-        
-        ws.append_row([date_str, weight, PRICE_PER_KG, final_total])
-        st.toast(f"Saved {weight}kg | Total: RM {final_total}")
+        # Reset inputs
         st.session_state.weight_input = None
+        st.session_state.price_input = 0.0
         st.cache_data.clear()
-    else:
-        st.error("Invalid weight")
 
 def delete_row():
     idx_to_del = st.session_state.get("row_to_delete")
@@ -95,14 +93,32 @@ st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-st.sidebar.number_input(
+# Weight Input
+weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
     value=None, 
     step=0.1, 
-    key="weight_input", 
-    on_change=save_data
+    key="weight_input"
 )
+
+# Dynamic Price calculation (Rounded Down)
+suggested_price = 0.0
+if weight:
+    suggested_price = float(math.floor(weight * PRICE_PER_KG))
+
+# Price Input (Allows manual discount override)
+st.sidebar.number_input(
+    "Final Price (RM)", 
+    min_value=0.0, 
+    value=suggested_price, 
+    step=1.0, 
+    key="price_input"
+)
+
+if st.sidebar.button("Save Sale"):
+    save_data()
+    st.rerun()
 
 if not df.empty:
     st.sidebar.markdown("---")
@@ -145,7 +161,7 @@ with dashboard.container():
         display_wgt = wgt_total if wgt_total > 0 else df[weight_col].sum()
 
         c1, c2 = st.columns(2)
-        c1.metric("Total Revenue", f"RM {display_rev:,.0f}") # Format as whole number
+        c1.metric("Total Revenue", f"RM {display_rev:,.0f}")
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
