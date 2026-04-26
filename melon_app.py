@@ -25,7 +25,7 @@ if 'ws' not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- SAVE CALLBACK ---
+# --- SILENT SAVE CALLBACK ---
 def quick_save():
     v = st.session_state.v_num
     w_text = st.session_state.get(f"w_{v}", "")
@@ -34,19 +34,16 @@ def quick_save():
     try:
         w_val = float(w_text) if w_text else 0.0
         std_p = float(math.floor(w_val * PRICE_PER_KG))
-        # Use manual price if typed, otherwise use calculated
         p_val = float(p_text) if p_text else std_p
 
         if w_val > 0:
             date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
             ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
-            st.toast(f"✅ Saved RM {p_val}")
+            # Removed st.toast() for silent saving
             st.cache_data.clear()
             st.session_state.v_num += 1 
-        else:
-            st.error("Enter weight!")
     except:
-        st.error("Check numbers")
+        pass # Silently fail if data is invalid
 
 # --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
@@ -75,17 +72,17 @@ try:
     if w_val > 0:
         std_p = float(math.floor(w_val * PRICE_PER_KG))
         
+        # This dropdown acts as the only "heads up"
         with st.sidebar.expander("📊 Calculation Preview", expanded=True):
             if manual_price_text:
                 m_val = float(manual_price_text)
                 st.write(f"Weight: **{w_val} kg**")
                 st.write(f"Original: ~~RM {std_p:.0f}~~")
-                st.write(f"Discounted: **RM {m_val:.0f}**")
+                st.write(f"Final Total: **RM {m_val:.0f}**")
             else:
                 st.write(f"Weight: **{w_val} kg**")
-                st.write(f"Rate: **RM {PRICE_PER_KG:.0f}/kg**")
                 st.write(f"Total: **RM {std_p:.0f}**")
-                st.caption("Hit Enter to Save")
+            st.caption("Press Enter in the Weight box to save.")
 except:
     pass
 
@@ -104,7 +101,7 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
-    # Quick calculations for metrics
+    # Totals for Dashboard
     rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
     wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
     
