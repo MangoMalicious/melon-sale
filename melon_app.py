@@ -6,7 +6,7 @@ import pytz
 import io 
 import math 
 
-# CONFIG - Updated Price to RM 20
+# CONFIG
 PRICE_PER_KG = 20.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
@@ -29,7 +29,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Auth with Persistence
+# Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -58,16 +58,19 @@ def get_totals():
 
 # --- ACTIONS ---
 def save_data():
-    # Use .get() to pull latest widget states
     weight = st.session_state.get("weight_input")
     final_price = st.session_state.get("price_input") 
     selected_date = st.session_state.get("date_input")
     
-    if weight and weight > 0 and final_price is not None:
+    if weight and weight > 0:
         date_str = selected_date.strftime("%d-%m-%Y") 
         ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
         st.toast(f"Saved: {weight}kg for RM {final_price}")
         st.cache_data.clear()
+        
+        # Clear inputs for next entry
+        st.session_state["weight_input"] = 0.0
+        st.session_state["price_input"] = 0.0
     else:
         st.error("Invalid entry")
 
@@ -78,7 +81,7 @@ def delete_row():
             sheet_row = int(idx_to_del) + 2
             ws.delete_rows(sheet_row)
             st.toast(f"ID {idx_to_del} removed")
-            st.session_state.row_to_delete = None
+            st.session_state.row_to_delete = 0
             st.cache_data.clear()
         except Exception:
             st.error("Delete failed")
@@ -91,27 +94,32 @@ st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
-# 1. Weight Input
+# Use a default 0.0 but allow it to trigger a change
 weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
-    value=None, 
     step=0.1, 
     key="weight_input"
 )
 
-# 2. Dynamic Calculation (Live Price Sync)
-# This calculates RM 20 * weight and floors it
-suggested_price = 0.0
-if weight:
-    suggested_price = float(math.floor(weight * PRICE_PER_KG))
+# Calculation logic that runs EVERY time the script reruns
+if weight > 0:
+    calc_price = float(math.floor(weight * PRICE_PER_KG))
+else:
+    calc_price = 0.0
 
-# 3. Final Price Input
-# By linking 'value' to 'suggested_price', it updates automatically when weight is typed
+# This is the "Magic" fix:
+# If the weight was just changed, we update the price_input state manually
+if "last_weight" not in st.session_state:
+    st.session_state.last_weight = 0.0
+
+if weight != st.session_state.last_weight:
+    st.session_state.price_input = calc_price
+    st.session_state.last_weight = weight
+
 st.sidebar.number_input(
     "Final Price (RM)", 
     min_value=0.0, 
-    value=suggested_price, 
     step=1.0, 
     key="price_input"
 )
@@ -123,7 +131,7 @@ if st.sidebar.button("Save Sale"):
 if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
-    st.sidebar.number_input("Enter ID to Delete", min_value=0, step=1, value=None, key="row_to_delete", on_change=delete_row)
+    st.sidebar.number_input("Enter ID to Delete", min_value=0, step=1, key="row_to_delete", on_change=delete_row)
 
     st.sidebar.markdown("---")
     st.sidebar.header("Reports")
@@ -133,7 +141,6 @@ if not df.empty:
         df.to_excel(writer, index=False, sheet_name='Sales')
     
     current_date_str = datetime.now(MY_TZ).strftime('%d-%m-%Y')
-    
     st.sidebar.download_button(
         label="Download Excel Report",
         data=buffer.getvalue(),
@@ -165,10 +172,8 @@ with dashboard.container():
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
-        
         df_display = df.copy()
         df_display.index = range(len(df))
-        
         st.dataframe(df_display, use_container_width=True)
     else:
         st.info("No sales logged yet.")
