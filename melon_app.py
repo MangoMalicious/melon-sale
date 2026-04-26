@@ -12,23 +12,6 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- INITIALIZE STATE ---
-if "form_version" not in st.session_state:
-    st.session_state.form_version = 0
-
-# --- SIMPLE CSS ---
-st.markdown(
-    """
-    <style>
-    /* Hides any remaining widget instructions */
-    [data-testid="stWidgetInstructions"] {
-        display: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
@@ -56,48 +39,47 @@ def get_totals():
     except:
         return 0.0, 0.0
 
-# --- SIDEBAR LOG SALE (NO FORM) ---
+# --- SIDEBAR LOG SALE ---
 st.sidebar.header("Log New Sale")
 
-# Dynamic ID to force reset
-v = st.session_state.form_version
-
-sale_date = st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
-
-# Weight starts blank
-weight_text = st.sidebar.text_input("Weight (kg)", value="", placeholder="Enter weight...", key=f"w_{v}")
-
-try:
-    weight = float(weight_text) if weight_text else 0.0
-except ValueError:
-    weight = 0.0
-
-# Auto-calculate suggested price
-calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
-
-# Price starts blank but logic handles the calculated default
-price_placeholder = f"RM {calc_price:.0f}" if weight > 0 else "Enter price..."
-price_text = st.sidebar.text_input("Final Price (RM)", value="", placeholder=price_placeholder, key=f"p_{v}")
-
-try:
-    if not price_text and weight > 0:
-        final_price = calc_price
-    else:
-        final_price = float(price_text) if price_text else 0.0
-except ValueError:
-    final_price = 0.0
-
-if st.sidebar.button("Save Sale"):
-    if weight > 0 and final_price > 0:
-        date_str = sale_date.strftime("%d-%m-%Y") 
-        ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
-        st.toast(f"Saved: {weight}kg for RM {final_price}")
-        st.cache_data.clear()
-        # Force the reset by incrementing version
-        st.session_state.form_version += 1
-        st.rerun()
-    else:
-        st.sidebar.error("Enter weight and price")
+# clear_on_submit=True ensures the boxes go blank after saving
+with st.sidebar.form("sale_form", clear_on_submit=True):
+    sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
+    
+    # Weight starts blank
+    weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
+    
+    try:
+        weight = float(weight_text) if weight_text else 0.0
+    except ValueError:
+        weight = 0.0
+    
+    # Auto-calculate suggested price
+    calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
+    
+    # Price also starts blank. If user leaves it blank, we use calc_price.
+    price_placeholder = f"Calculated: RM {calc_price:.0f}" if weight > 0 else "Enter price..."
+    price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
+    
+    try:
+        if not price_text and weight > 0:
+            final_price = calc_price
+        else:
+            final_price = float(price_text) if price_text else 0.0
+    except ValueError:
+        final_price = 0.0
+    
+    submitted = st.form_submit_button("Save Sale")
+    
+    if submitted:
+        if weight > 0 and final_price > 0:
+            date_str = sale_date.strftime("%d-%m-%Y") 
+            ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
+            st.toast(f"Saved: {weight}kg for RM {final_price}")
+            st.cache_data.clear()
+            st.rerun()
+        else:
+            st.error("Please enter weight and price")
 
 # --- MANAGE & REPORTS ---
 df = load_recent_data()
@@ -107,7 +89,7 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.text_input("Enter ID", value="", key="del_id")
+        row_to_del = st.text_input("Enter ID to Delete", value="")
         if st.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
@@ -124,9 +106,10 @@ if not df.empty:
         df.to_excel(writer, index=False, sheet_name='Sales')
     
     st.sidebar.download_button(
-        label="Download Excel",
+        label="Download Excel Report",
         data=buffer.getvalue(),
-        file_name="bg_melon_sales.xlsx"
+        file_name=f"bg_melon_sales.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 # --- MAIN DASHBOARD ---
