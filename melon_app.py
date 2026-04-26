@@ -4,13 +4,12 @@ import gspread
 from datetime import datetime
 import pytz
 
-# CONFIG
 PRICE_PER_KG = 20.0
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- GOOGLE SHEETS AUTH ---
+# --- GOOGLE SHEETS ---
 if "ws" not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -19,84 +18,64 @@ if "ws" not in st.session_state:
 
 ws = st.session_state.ws
 
-# --- INPUT FORM ---
+# --- SESSION STATE ---
+if "step" not in st.session_state:
+    st.session_state.step = 1
+
+if "weight" not in st.session_state:
+    st.session_state.weight = 0.0
+
+if "discount" not in st.session_state:
+    st.session_state.discount = 0.0
+
+# --- INPUT ---
 st.sidebar.header("Log New Sale")
 
-with st.sidebar.form("sale_form", clear_on_submit=True):
+weight = st.sidebar.number_input("Weight (kg)", min_value=0.0, step=0.1, format="%.2f")
+discount = st.sidebar.number_input("Discount (%)", min_value=0.0, max_value=100.0, step=1.0)
 
-    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.1, format="%.2f")
-    discount = st.number_input("Discount (%)", min_value=0.0, max_value=100.0, step=1.0)
+base_price = weight * PRICE_PER_KG
+final_price = base_price * (1 - discount / 100)
 
-    # --- CALCULATION ---
-    base_price = weight * PRICE_PER_KG
-    final_price = base_price * (1 - discount / 100)
-
-    # --- PREVIEW ---
-    if weight > 0:
-        st.write("Price Preview")
-        st.write(f"Base price: RM {base_price:.2f}")
-        st.write(f"Discount: {discount:.0f}%")
-        st.write(f"Final total: RM {final_price:.2f}")
-    else:
-        st.write("Total: RM 0.00")
-
-    submitted = st.form_submit_button("Confirm & Save")
-
-    if submitted:
+# --- STEP 1: PREVIEW LOCK ---
+if st.session_state.step == 1:
+    if st.sidebar.button("Enter (Preview)"):
         if weight <= 0:
-            st.error("Weight must be greater than 0")
+            st.error("Enter valid weight")
         else:
-            try:
-                date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y")
+            st.session_state.weight = weight
+            st.session_state.discount = discount
+            st.session_state.base_price = base_price
+            st.session_state.final_price = final_price
+            st.session_state.step = 2
+            st.rerun()
 
-                # MATCHING YOUR SHEET FORMAT EXACTLY:
-                # Date | Weight(kg) | Price(per_kg) | Total(RM)
-                ws.append_row([
-                    date_str,
-                    weight,
-                    PRICE_PER_KG,
-                    final_price
-                ])
+# --- STEP 2: CONFIRM SAVE ---
+elif st.session_state.step == 2:
+    st.sidebar.write("Preview Locked")
+    st.sidebar.write(f"Weight: {st.session_state.weight} kg")
+    st.sidebar.write(f"Final: RM {st.session_state.final_price:.2f}")
 
-                st.success(f"Saved: {weight}kg | RM {final_price:.2f}")
-                st.cache_data.clear()
+    if st.sidebar.button("Enter (Save)"):
+        try:
+            date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y")
 
-            except Exception as e:
-                st.error(f"Save failed: {e}")
+            ws.append_row([
+                date_str,
+                st.session_state.weight,
+                PRICE_PER_KG,
+                st.session_state.final_price
+            ])
 
-st.sidebar.markdown("---")
+            st.success("Sale saved")
 
-# --- LOAD DATA ---
-@st.cache_data(ttl=10)
-def load_data():
-    data = ws.get_all_values()
+            # reset flow
+            st.session_state.step = 1
+            st.rerun()
 
-    if len(data) <= 1:
-        return pd.DataFrame()
+        except Exception as e:
+            st.error(f"Save failed: {e}")
 
-    headers = data[0]
-    rows = data[1:]
-
-    return pd.DataFrame(rows, columns=headers)
-
-df = load_data()
-
-# --- DASHBOARD ---
-st.title("BG Melon Sale")
-
-if not df.empty:
-    df["Total(RM)"] = pd.to_numeric(df["Total(RM)"], errors="coerce")
-    df["Weight(kg)"] = pd.to_numeric(df["Weight(kg)"], errors="coerce")
-
-    total_revenue = df["Total(RM)"].sum()
-    total_weight = df["Weight(kg)"].sum()
-
-    c1, c2 = st.columns(2)
-    c1.metric("Total Revenue", f"RM {total_revenue:,.2f}")
-    c2.metric("Total Weight", f"{total_weight:,.2f} kg")
-
-    st.subheader("Recent Sales")
-    st.dataframe(df, use_container_width=True)
-
-else:
-    st.info("No sales data yet")
+    if st.sidebar.button("Cancel"):
+        st.session_state.step = 1
+        st.rerun()
