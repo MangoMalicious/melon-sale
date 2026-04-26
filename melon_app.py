@@ -38,11 +38,9 @@ st.sidebar.header("Log New Sale")
 
 # STEP 1: INPUT
 if st.session_state.step == 1:
-    # Adding an on_change here captures the FIRST ENTER
     def move_to_step2():
         if st.session_state.temp_w > 0:
             st.session_state.weight = st.session_state.temp_w
-            # Calculate price
             base = st.session_state.weight * PRICE_PER_KG
             disc = st.session_state.get("temp_d", 0.0)
             st.session_state.final_price = math.floor(base * (1 - disc / 100))
@@ -54,7 +52,7 @@ if st.session_state.step == 1:
         step=0.1, 
         format="%.2f", 
         key="temp_w", 
-        on_change=move_to_step2
+        on_change=move_to_step2 # FIRST ENTER
     )
     
     st.sidebar.number_input(
@@ -65,19 +63,14 @@ if st.session_state.step == 1:
         key="temp_d"
     )
 
-    if st.sidebar.button("Click for Preview (or hit Enter)"):
-        move_to_step2()
-        st.rerun()
-
-# STEP 2: CONFIRMATION
+# STEP 2: CONFIRMATION (The Fix)
 elif st.session_state.step == 2:
-    st.sidebar.info("✅ PREVIEW LOCKED")
+    st.sidebar.warning("✅ PREVIEW LOCKED")
     st.sidebar.write(f"**Weight:** {st.session_state.weight} kg")
     st.sidebar.write(f"**Total Price:** RM {st.session_state.final_price}")
     
-    # This button captures the SECOND ENTER
-    # In Streamlit, the primary button is triggered by Enter when the page reruns
-    if st.sidebar.button("PRESS ENTER TO SAVE", type="primary", use_container_width=True):
+    # THE FIX: This empty text input captures the SECOND ENTER
+    def confirm_save():
         try:
             date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y")
             ws.append_row([
@@ -89,9 +82,16 @@ elif st.session_state.step == 2:
             st.toast("Saved!")
             st.session_state.step = 1
             st.cache_data.clear()
-            st.rerun()
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
+
+    # This box is automatically focused because it's the only input in Step 2
+    st.sidebar.text_input(
+        "Press ENTER again to SAVE", 
+        key="confirm_trigger", 
+        on_change=confirm_save,
+        placeholder="Hit Enter now..."
+    )
 
     if st.sidebar.button("Cancel / Fix"):
         st.session_state.step = 1
