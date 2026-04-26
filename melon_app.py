@@ -4,17 +4,15 @@ import gspread
 from datetime import datetime
 import pytz
 import io 
+import math # Added for rounding down
 
 # CONFIG
 PRICE_PER_KG = 20.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-st.set_page_config(
-    page_title="BG Melon Sale", 
-    layout="centered"
-)
+st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- THE ULTIMATE CSS FIX (Anti-Flicker) ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
@@ -31,7 +29,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Auth with Persistence
+# Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
     gc = gspread.service_account_from_dict(creds)
@@ -61,14 +59,17 @@ def get_totals():
 # --- ACTIONS ---
 def save_data():
     weight = st.session_state.weight_input
-    # Use the selected date from session state
     selected_date = st.session_state.date_input
     
     if weight and weight > 0:
-        # Format the selected date to match your sheet preference
         date_str = selected_date.strftime("%d-%m-%Y") 
-        ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
-        st.toast(f"Saved {weight}kg for {date_str}")
+        
+        # LOGIC CHANGE: Round down to the nearest Ringgit (Floor)
+        # Example: 2.51kg * RM18 = RM45.18 -> Becomes RM45.00
+        final_total = math.floor(weight * PRICE_PER_KG)
+        
+        ws.append_row([date_str, weight, PRICE_PER_KG, final_total])
+        st.toast(f"Saved {weight}kg | Total: RM {final_total}")
         st.session_state.weight_input = None
         st.cache_data.clear()
     else:
@@ -92,12 +93,7 @@ rev_total, wgt_total = get_totals()
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
 
-# Date Picker (Defaults to current live date in Malaysia)
-st.sidebar.date_input(
-    "Sale Date", 
-    value=datetime.now(MY_TZ), 
-    key="date_input"
-)
+st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
 st.sidebar.number_input(
     "Weight (kg)", 
@@ -149,14 +145,12 @@ with dashboard.container():
         display_wgt = wgt_total if wgt_total > 0 else df[weight_col].sum()
 
         c1, c2 = st.columns(2)
-        c1.metric("Total Revenue", f"RM {display_rev:,.2f}")
+        c1.metric("Total Revenue", f"RM {display_rev:,.0f}") # Format as whole number
         c2.metric("Total Weight", f"{display_wgt:,.2f} kg")
         
         st.subheader("Sales History")
-        
         df_display = df.copy()
         df_display.index = range(len(df))
-        
         st.dataframe(df_display, use_container_width=True)
     else:
         st.info("No sales logged yet.")
