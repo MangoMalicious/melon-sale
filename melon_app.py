@@ -9,7 +9,6 @@ import io
 PRICE_PER_KG = 18.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
-# Updated Branding - Icon Removed
 st.set_page_config(
     page_title="BG Melon Sale", 
     layout="centered"
@@ -62,11 +61,14 @@ def get_totals():
 # --- ACTIONS ---
 def save_data():
     weight = st.session_state.weight_input
+    # Use the selected date from session state
+    selected_date = st.session_state.date_input
+    
     if weight and weight > 0:
-        now = datetime.now(MY_TZ)
-        date_str = now.strftime("%d-%m-%Y") 
+        # Format the selected date to match your sheet preference
+        date_str = selected_date.strftime("%d-%m-%Y") 
         ws.append_row([date_str, weight, PRICE_PER_KG, round(weight * PRICE_PER_KG, 2)])
-        st.toast(f"Saved {weight}kg")
+        st.toast(f"Saved {weight}kg for {date_str}")
         st.session_state.weight_input = None
         st.cache_data.clear()
     else:
@@ -89,7 +91,22 @@ rev_total, wgt_total = get_totals()
 
 # --- SIDEBAR ---
 st.sidebar.header("Log New Sale")
-st.sidebar.number_input("Weight (kg)", min_value=0.0, value=None, step=0.1, key="weight_input", on_change=save_data)
+
+# Date Picker (Defaults to current live date in Malaysia)
+st.sidebar.date_input(
+    "Sale Date", 
+    value=datetime.now(MY_TZ), 
+    key="date_input"
+)
+
+st.sidebar.number_input(
+    "Weight (kg)", 
+    min_value=0.0, 
+    value=None, 
+    step=0.1, 
+    key="weight_input", 
+    on_change=save_data
+)
 
 if not df.empty:
     st.sidebar.markdown("---")
