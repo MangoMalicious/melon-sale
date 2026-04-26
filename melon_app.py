@@ -12,17 +12,19 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- AGGRESSIVE CSS FIX ---
+# --- THE ULTIMATE CSS FIX ---
 st.markdown(
     """
     <style>
-    /* Hides the 'Press Enter' instructions and small subtext captions */
-    [data-testid="stWidgetInstructions"], 
-    .st-emotion-cache-1pxm84u, 
+    /* Target the specific caption class and instruction data-testids */
+    [data-testid="stWidgetInstructions"],
+    [data-testid="caption"],
+    .st-emotion-cache-1pxm84u,
+    .st-emotion-cache-183060o,
     small {
         display: none !important;
     }
-    /* Ensures the form looks clean on mobile */
+    /* Removes border and padding from form to keep it tight */
     div[data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
