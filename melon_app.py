@@ -6,7 +6,7 @@ import pytz
 import io 
 import math 
 
-# CONFIG
+# CONFIG - Updated Price to RM 20
 PRICE_PER_KG = 20.00
 MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
@@ -58,7 +58,7 @@ def get_totals():
 
 # --- ACTIONS ---
 def save_data():
-    # Use .get() to avoid key errors if widgets haven't rendered yet
+    # Use .get() to pull latest widget states
     weight = st.session_state.get("weight_input")
     final_price = st.session_state.get("price_input") 
     selected_date = st.session_state.get("date_input")
@@ -91,6 +91,7 @@ st.sidebar.header("Log New Sale")
 
 st.sidebar.date_input("Sale Date", value=datetime.now(MY_TZ), key="date_input")
 
+# 1. Weight Input
 weight = st.sidebar.number_input(
     "Weight (kg)", 
     min_value=0.0, 
@@ -99,11 +100,14 @@ weight = st.sidebar.number_input(
     key="weight_input"
 )
 
-# Suggested Price Logic (Floor rounding)
+# 2. Dynamic Calculation (Live Price Sync)
+# This calculates RM 20 * weight and floors it
 suggested_price = 0.0
 if weight:
     suggested_price = float(math.floor(weight * PRICE_PER_KG))
 
+# 3. Final Price Input
+# By linking 'value' to 'suggested_price', it updates automatically when weight is typed
 st.sidebar.number_input(
     "Final Price (RM)", 
     min_value=0.0, 
