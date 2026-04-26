@@ -3,7 +3,6 @@ import pandas as pd
 import gspread
 from datetime import datetime
 import pytz
-import io 
 import math 
 
 # CONFIG
@@ -28,20 +27,20 @@ ws = st.session_state.ws
 # --- SAVE CALLBACK ---
 def quick_save():
     v = st.session_state.v_num
-    # Get values directly from the widget keys
-    w_text = st.session_state.get(f"w_{v}", "")
+    # Get weight from the number_input and price from the text_input
+    w_val = st.session_state.get(f"w_{v}", 0.0)
     p_text = st.session_state.get(f"p_{v}", "")
     
+    std_p = float(math.floor(w_val * PRICE_PER_KG))
+    
     try:
-        w_val = float(w_text) if w_text else 0.0
-        std_p = float(math.floor(w_val * PRICE_PER_KG))
         p_val = float(p_text) if p_text else std_p
-
         if w_val > 0:
             date_str = datetime.now(MY_TZ).strftime("%d-%m-%Y") 
             ws.append_row([date_str, w_val, PRICE_PER_KG, p_val])
             st.cache_data.clear()
-            st.session_state.v_num += 1 
+            # Increment version to reset inputs to blank/0.0
+            st.session_state.v_num += 1
     except:
         pass
 
@@ -49,7 +48,7 @@ def quick_save():
 st.sidebar.header("Log New Sale")
 v = st.session_state.v_num
 
-# 1. Manual Price (Optional)
+# 1. Manual Price (Optional - Text Input)
 manual_price_text = st.sidebar.text_input(
     "Discount Price (Optional)", 
     value="", 
@@ -57,40 +56,38 @@ manual_price_text = st.sidebar.text_input(
     key=f"p_{v}"
 )
 
-# 2. Weight (The Trigger)
-weight_text = st.sidebar.text_input(
+# 2. Weight (Number Input for LIVE updating)
+# We use a number_input here because it updates the state immediately
+weight = st.sidebar.number_input(
     "Weight (kg)", 
-    value="", 
-    placeholder="Type weight & hit Enter", 
-    key=f"w_{v}",
-    on_change=quick_save
+    min_value=0.0, 
+    step=0.1, 
+    format="%.2f",
+    key=f"w_{v}"
 )
 
-# --- THE PREVIEW (Calculates live while typing) ---
-# We use the raw text from the input box to show the preview BEFORE they hit Enter
-if weight_text:
-    try:
-        w_val = float(weight_text)
-        if w_val > 0:
-            std_p = float(math.floor(w_val * PRICE_PER_KG))
-            
-            with st.sidebar.expander("📊 Price Preview", expanded=True):
-                if manual_price_text:
-                    try:
-                        m_val = float(manual_price_text)
-                        st.write(f"Weight: **{w_val} kg**")
-                        st.write(f"Manual Price: **RM {m_val:.0f}**")
-                        st.caption(f"~~Original: RM {std_p:.0f}~~")
-                    except:
-                        st.write(f"Weight: **{w_val} kg**")
-                        st.write(f"Auto Total: **RM {std_p:.0f}**")
-                else:
-                    st.write(f"Weight: **{w_val} kg**")
-                    st.write(f"Auto Total: **RM {std_p:.0f}**")
-                
-                st.info("Hit Enter in Weight box to Save")
-    except ValueError:
-        pass
+# --- THE DROPDOWN PREVIEW ---
+if weight > 0:
+    std_p = float(math.floor(weight * PRICE_PER_KG))
+    
+    with st.sidebar.expander("📊 Price Preview", expanded=True):
+        if manual_price_text:
+            try:
+                m_val = float(manual_price_text)
+                st.write(f"Weight: **{weight} kg**")
+                st.write(f"Manual Price: **RM {m_val:.0f}**")
+                st.caption(f"~~Original: RM {std_p:.0f}~~")
+            except:
+                st.write(f"Weight: **{weight} kg**")
+                st.write(f"Auto Total: **RM {std_p:.0f}**")
+        else:
+            st.write(f"Weight: **{weight} kg**")
+            st.write(f"Auto Total: **RM {std_p:.0f}**")
+        
+        # This button replaces the "Enter" trigger for better reliability
+        if st.button("Save This Sale"):
+            quick_save()
+            st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -107,6 +104,7 @@ df = load_recent_data()
 
 st.title("BG Melon Sale")
 if not df.empty:
+    # Column 3 is Final Total, Column 1 is Weight
     rev = pd.to_numeric(df.iloc[:, 3], errors='coerce').sum()
     wgt = pd.to_numeric(df.iloc[:, 1], errors='coerce').sum()
     
