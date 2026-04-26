@@ -12,19 +12,6 @@ MY_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 st.set_page_config(page_title="BG Melon Sale", layout="centered")
 
-# --- CSS FIX ---
-st.markdown(
-    """
-    <style>
-    [data-testid="stWidgetInstructions"], 
-    section[data-testid="stSidebar"] small {
-        display: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Auth
 if 'ws' not in st.session_state:
     creds = dict(st.secrets["gcp_service_account"])
@@ -58,34 +45,41 @@ st.sidebar.header("Log New Sale")
 with st.sidebar.form("sale_form", clear_on_submit=True):
     sale_date = st.date_input("Sale Date", value=datetime.now(MY_TZ))
     
-    # Using text_input with value="" makes it start BLANK
+    # Weight starts blank
     weight_text = st.text_input("Weight (kg)", value="", placeholder="Enter weight...")
     
-    # Process the text into a number safely
     try:
         weight = float(weight_text) if weight_text else 0.0
     except ValueError:
         weight = 0.0
-        st.error("Please enter a valid number for weight")
     
-    # Calculation
+    # Auto-calculate suggested price
     calc_price = float(math.floor(weight * PRICE_PER_KG)) if weight > 0 else 0.0
     
-    # We keep price as a number_input so it's easy to adjust, 
-    # but it will update to the calculated price as soon as weight is typed.
-    final_price = st.number_input("Final Price (RM)", min_value=0.0, step=1.0, value=calc_price)
+    # Price also starts blank but shows the calculated value as a placeholder if weight is entered
+    price_placeholder = f"RM {calc_price:.0f}" if weight > 0 else "Enter price..."
+    price_text = st.text_input("Final Price (RM)", value="", placeholder=price_placeholder)
+    
+    try:
+        # If user leaves Price blank but entered Weight, use the calculated price
+        if not price_text and weight > 0:
+            final_price = calc_price
+        else:
+            final_price = float(price_text) if price_text else 0.0
+    except ValueError:
+        final_price = 0.0
     
     submitted = st.form_submit_button("Save Sale")
     
     if submitted:
-        if weight > 0:
+        if weight > 0 and final_price > 0:
             date_str = sale_date.strftime("%d-%m-%Y") 
-            ws.append_row([date_str, weight, PRICE_PER_KG, float(final_price)])
+            ws.append_row([date_str, weight, PRICE_PER_KG, final_price])
             st.toast(f"Saved: {weight}kg for RM {final_price}")
             st.cache_data.clear()
             st.rerun()
         else:
-            st.error("Please enter a weight before saving")
+            st.error("Enter both Weight and Price")
 
 # --- MANAGE & REPORTS ---
 df = load_recent_data()
@@ -95,7 +89,7 @@ if not df.empty:
     st.sidebar.markdown("---")
     st.sidebar.header("Manage Data")
     with st.sidebar.expander("Delete Entry"):
-        row_to_del = st.number_input("Enter ID to Delete", min_value=0, step=1)
+        row_to_del = st.text_input("Enter ID to Delete", value="")
         if st.button("Confirm Delete"):
             try:
                 ws.delete_rows(int(row_to_del) + 2)
@@ -103,7 +97,7 @@ if not df.empty:
                 st.cache_data.clear()
                 st.rerun()
             except:
-                st.error("Delete failed")
+                st.error("Invalid ID")
 
     st.sidebar.markdown("---")
     st.sidebar.header("Reports")
